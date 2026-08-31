@@ -25,10 +25,6 @@ class AppConfig:
     version: str = "auto"
     arch: list[str] = field(default_factory=lambda: ["universal"])
     dpi: str = ""
-    cli_source: str = ""
-    cli_version: str = "latest"
-    patches_source: str = ""
-    patches_version: str = "latest"
     aurorastore: bool = False
     aurorastore_url: Optional[str] = None
     apkmirror_url: Optional[str] = None
@@ -36,6 +32,10 @@ class AppConfig:
     apkpure_url: Optional[str] = None
     ia_url: Optional[str] = None
     direct_url: Optional[str] = None
+    cli_source: str = ""
+    cli_version: str = "latest"
+    patches_source: str = ""
+    patches_version: str = "latest"
     exclusive_patches: bool = False
     included_patches: list[str] = field(default_factory=list)
     excluded_patches: list[str] = field(default_factory=list)

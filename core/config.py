@@ -99,11 +99,6 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
         arch = _normalize_arch(section_data.get("arch", "universal"))
         dpi = section_data.get("dpi", "")
 
-        cli_source = section_data.get("cli_source", general.default_cli_source)
-        cli_version = section_data.get("cli_version", general.default_cli_version)
-        patches_source = section_data.get("patches_source", general.default_patches_source)
-        patches_version = section_data.get("patches_version", general.default_patches_version)
-
         # URLs & Sources
         aurorastore = section_data.get("aurorastore", False)
         aurorastore_url = section_data.get("aurorastore_url")
@@ -112,6 +107,12 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
         apkpure_url = section_data.get("apkpure_url")
         ia_url = section_data.get("ia_url")
         direct_url = section_data.get("direct_url")
+
+        # Patcher Overrides
+        cli_source = section_data.get("cli_source", general.default_cli_source)
+        cli_version = section_data.get("cli_version", general.default_cli_version)
+        patches_source = section_data.get("patches_source", general.default_patches_source)
+        patches_version = section_data.get("patches_version", general.default_patches_version)
 
         exclusive_patches = section_data.get("exclusive_patches", False)
         included_patches = _parse_patches_list(section_data.get("included_patches", []))
@@ -129,10 +130,6 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
             version=str(version),
             arch=arch,
             dpi=str(dpi),
-            cli_source=cli_source,
-            cli_version=cli_version,
-            patches_source=patches_source,
-            patches_version=patches_version,
             aurorastore=bool(aurorastore),
             aurorastore_url=aurorastore_url,
             apkmirror_url=apkmirror_url,
@@ -140,6 +137,10 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
             apkpure_url=apkpure_url,
             ia_url=ia_url,
             direct_url=direct_url,
+            cli_source=cli_source,
+            cli_version=cli_version,
+            patches_source=patches_source,
+            patches_version=patches_version,
             exclusive_patches=bool(exclusive_patches),
             included_patches=included_patches,
             excluded_patches=excluded_patches,
