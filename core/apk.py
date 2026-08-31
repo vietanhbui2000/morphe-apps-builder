@@ -167,7 +167,7 @@ def sign_apk(
     key_alias: str,
     output_path: Optional[Path] = None
 ) -> bool:
-    """Sign an APK using apksigner."""
+    """Sign an APK using apksigner with automatic keystore type fallback."""
     if not APK_SIGNER_JAR.is_file():
         log_error(f"apksigner.jar not found at {APK_SIGNER_JAR}", indent=2)
         return False
@@ -177,23 +177,29 @@ def sign_apk(
         return False
 
     out_apk = output_path or apk_path
-    cmd = [
-        "java", "-jar", str(APK_SIGNER_JAR),
-        "sign",
-        "--ks", str(keystore_path),
-        "--ks-pass", f"pass:{keystore_password}",
-        "--key-pass", f"pass:{keystore_password}",
-        "--ks-key-alias", key_alias,
-        "--out", str(out_apk),
-        str(apk_path)
-    ]
 
-    try:
-        res = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        if res.returncode != 0:
-            log_error(f"apksigner signing failed: {res.stderr or res.stdout}", indent=2)
-            return False
-        return out_apk.is_file() and out_apk.stat().st_size > 0
-    except Exception as e:
-        log_error(f"Error executing apksigner: {e}", indent=2)
-        return False
+    # Try default, PKCS12, then JKS to handle all keystore encodings across JDK versions
+    for ks_type in (None, "PKCS12", "JKS"):
+        cmd = [
+            "java", "-jar", str(APK_SIGNER_JAR),
+            "sign",
+            "--ks", str(keystore_path),
+            "--ks-pass", f"pass:{keystore_password}",
+            "--key-pass", f"pass:{keystore_password}",
+            "--ks-key-alias", key_alias,
+        ]
+        if ks_type:
+            cmd.extend(["--ks-type", ks_type])
+        cmd.extend(["--out", str(out_apk), str(apk_path)])
+
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+            if res.returncode == 0 and out_apk.is_file() and out_apk.stat().st_size > 0:
+                return True
+            if ks_type == "JKS":
+                log_error(f"apksigner signing failed: {res.stderr or res.stdout}", indent=2)
+        except Exception as e:
+            if ks_type == "JKS":
+                log_error(f"Error executing apksigner: {e}", indent=2)
+
+    return False
