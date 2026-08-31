@@ -6,6 +6,7 @@ Morphe CLI Patcher: compatible version resolver, options JSON generator, and pat
 import json
 import re
 import shlex
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -27,17 +28,17 @@ class MorphePatcher(BasePatcher):
 
     def get_compatible_version(
         self,
-        cli_file: Path,
-        patches_file: Path,
+        cli_path: Path,
+        patches_path: Path,
         app_id: str
     ) -> Optional[str]:
         """Query Morphe CLI to find the highest compatible version for a package."""
         # 1. Try list-versions commands (--patches and -p)
         for p_flag in ("--patches", "-p"):
             cmd = [
-                "java", "-jar", str(cli_file),
+                "java", "-jar", str(cli_path),
                 "list-versions",
-                p_flag, str(patches_file),
+                p_flag, str(patches_path),
                 "-f", app_id
             ]
             try:
@@ -53,8 +54,8 @@ class MorphePatcher(BasePatcher):
 
         # 2. Fallback to list-patches commands
         for cmd_list_patches in (
-            ["java", "-jar", str(cli_file), "list-patches", "-p", str(patches_file), "-f", app_id, "--with-packages", "--with-versions"],
-            ["java", "-jar", str(cli_file), "list-patches", "-p", str(patches_file), "--with-packages", "--with-versions"],
+            ["java", "-jar", str(cli_path), "list-patches", "-p", str(patches_path), "-f", app_id, "--with-packages", "--with-versions"],
+            ["java", "-jar", str(cli_path), "list-patches", "-p", str(patches_path), "--with-packages", "--with-versions"],
         ):
             try:
                 res = subprocess.run(cmd_list_patches, capture_output=True, text=True, check=False)
@@ -126,41 +127,41 @@ class MorphePatcher(BasePatcher):
 
     def patch(
         self,
-        cli_file: Path,
-        patches_files: list[Path],
-        stock_apk: Path,
-        output_apk: Path,
+        cli_path: Path,
+        patches_paths: list[Path],
+        stock_apk_path: Path,
+        output_path: Path,
         app_config: AppConfig,
         keystore_path: Path,
         keystore_alias: str,
         keystore_password: str
     ) -> bool:
-        output_apk.parent.mkdir(parents=True, exist_ok=True)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
         temp_dir = Path(tempfile.mkdtemp(prefix="morphe_patch_"))
         options_file = temp_dir / "options.json"
 
         cmd = [
-            "java", "-jar", str(cli_file),
+            "java", "-jar", str(cli_path),
             "patch"
         ]
 
-        for pf in patches_files:
+        for pf in patches_paths:
             cmd.extend(["-p", str(pf)])
-
-        if app_config.options and self._build_options_json(app_config.options, options_file):
-            cmd.extend(["--options-file", str(options_file)])
-
-        for excluded in app_config.excluded_patches:
-            cmd.extend(["-d", excluded])
-
-        for included in app_config.included_patches:
-            cmd.extend(["-e", included])
 
         if app_config.exclusive_patches:
             cmd.append("--exclusive")
 
+        for included in app_config.included_patches:
+            cmd.extend(["-e", included])
+
+        for excluded in app_config.excluded_patches:
+            cmd.extend(["-d", excluded])
+
         if app_config.patcher_args:
             cmd.extend(shlex.split(app_config.patcher_args))
+
+        if app_config.options and self._build_options_json(app_config.options, options_file):
+            cmd.extend(["--options-file", str(options_file)])
 
         if keystore_path.is_file():
             cmd.extend([
@@ -175,8 +176,8 @@ class MorphePatcher(BasePatcher):
             "--force",
             "--continue-on-error",
             "-t", str(temp_dir),
-            "-o", str(output_apk),
-            str(stock_apk)
+            "-o", str(output_path),
+            str(stock_apk_path)
         ])
 
         log_info(f"Running Morphe patcher: {' '.join(cmd[:6])} ...", indent=2)
@@ -203,7 +204,7 @@ class MorphePatcher(BasePatcher):
             process.stdout.close()
             return_code = process.wait()
 
-            if return_code == 0 and output_apk.is_file() and output_apk.stat().st_size > 0:
+            if return_code == 0 and output_path.is_file() and output_path.stat().st_size > 0:
                 return True
             else:
                 log_error(f"Patcher exited with code {return_code}", indent=2)
@@ -212,7 +213,6 @@ class MorphePatcher(BasePatcher):
             log_error(f"Execution error during patching: {e}", indent=2)
             return False
         finally:
-            import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 morphe_patcher = MorphePatcher()

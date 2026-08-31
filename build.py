@@ -126,8 +126,8 @@ def resolve_app_version(
 def download_single_target(
     app: AppConfig,
     arch: str,
-    cli_file: Path,
-    patches_file: Path,
+    cli_path: Path,
+    patches_path: Path,
     cli_tag: str,
     patches_tag: str,
     dry_run: bool = False
@@ -138,7 +138,7 @@ def download_single_target(
     """
     log_stage(f"Downloading {app.app_name} ({arch})")
 
-    resolved_version = resolve_app_version(app, cli_file, patches_file, dry_run=dry_run)
+    resolved_version = resolve_app_version(app, cli_path, patches_path, dry_run=dry_run)
     if not resolved_version:
         return [], "Could not resolve version for app"
 
@@ -152,10 +152,10 @@ def download_single_target(
             "version": resolved_version,
             "cli_source": app.cli_source,
             "cli_tag": cli_tag,
-            "cli_file": str(cli_file),
+            "cli_path": str(cli_path),
             "patches_source": app.patches_source,
             "patches_tag": patches_tag,
-            "patches_file": str(patches_file),
+            "patches_path": str(patches_path),
             "stock_apk": "",
         }
         if arch == "all":
@@ -206,10 +206,10 @@ def download_single_target(
         "stock_apk": str(downloaded_file),
         "cli_source": app.cli_source,
         "cli_tag": cli_tag,
-        "cli_file": str(cli_file),
+        "cli_path": str(cli_path),
         "patches_source": app.patches_source,
         "patches_tag": patches_tag,
-        "patches_file": str(patches_file),
+        "patches_path": str(patches_path),
     }
 
     if arch == "all":
@@ -238,8 +238,8 @@ def patch_single_target(
     app_name = target_info.get("app", target_info.get("name", target_info.get("app_name", app.name)))
     arch = target_info["arch"]
     version = target_info["version"]
-    cli_file = Path(target_info.get("cli_file", ""))
-    patches_file = Path(target_info.get("patches_file", ""))
+    cli_path = Path(target_info.get("cli_path", target_info.get("cli_file", "")))
+    patches_path = Path(target_info.get("patches_path", target_info.get("patches_file", "")))
 
     cli_source = target_info.get("cli_source", app.cli_source)
     cli_tag = target_info.get("cli_tag", target_info.get("cli_version", ""))
@@ -318,10 +318,10 @@ def patch_single_target(
 
     log_info(f"Applying patches for {app_name}...", indent=1)
     patch_success = morphe_patcher.patch(
-        cli_file=cli_file,
-        patches_files=[patches_file],
-        stock_apk=stock_apk,
-        output_apk=temp_patched,
+        cli_path=cli_path,
+        patches_paths=[patches_path],
+        stock_apk_path=stock_apk,
+        output_path=temp_patched,
         app_config=app,
         keystore_path=keystore_path,
         keystore_alias=general.keystore_alias,
@@ -568,7 +568,7 @@ def main() -> int:
         ))
 
         for cli_source, cli_version, patches_source, patches_version in unique_prebuilts:
-            cli_file, patches_file, cli_tag, patches_tag = github_client.get_prebuilts(
+            cli_path, patches_path, cli_tag, patches_tag = github_client.get_prebuilts(
                 cli_source=cli_source,
                 cli_version=cli_version,
                 patches_source=patches_source,
@@ -576,14 +576,14 @@ def main() -> int:
                 cli_dir=CLI_DIR,
                 patches_dir=PATCHES_DIR
             )
-            if not cli_file or not patches_file:
+            if not cli_path or not patches_path:
                 if args.dry_run:
-                    cli_file = CLI_DIR / "morphe-cli-mock.jar"
-                    patches_file = PATCHES_DIR / "morphe-patches-mock.mpp"
+                    cli_path = CLI_DIR / "morphe-cli-mock.jar"
+                    patches_path = PATCHES_DIR / "morphe-patches-mock.mpp"
                     cli_tag = "mock"
                     patches_tag = "mock"
             prebuilts_cache[(cli_source, cli_version, patches_source, patches_version)] = (
-                cli_file, patches_file, cli_tag, patches_tag
+                cli_path, patches_path, cli_tag, patches_tag
             )
         group_end()
 
@@ -593,12 +593,12 @@ def main() -> int:
             group_start(f"Download [{task_idx}/{total_download_tasks}]: {app.name}")
             log_app_banner(app_idx, len(enabled_apps), app.app_name, app.id)
 
-            cli_file, patches_file, cli_tag, patches_tag = prebuilts_cache.get(
+            cli_path, patches_path, cli_tag, patches_tag = prebuilts_cache.get(
                 (app.cli_source, app.cli_version, app.patches_source, app.patches_version),
                 (None, None, "", "")
             )
 
-            if not cli_file or not patches_file:
+            if not cli_path or not patches_path:
                 group_end()
                 for arch in app.arch:
                     failed_downloads.append(BuildResult(
@@ -607,7 +607,11 @@ def main() -> int:
                         version="unknown",
                         arch=arch,
                         success=False,
-                        error_message=f"Failed to fetch CLI/patches ({app.cli_source} / {app.patches_source})"
+                        error_message=f"Failed to fetch CLI/patches ({app.cli_source} / {app.patches_source})",
+                        cli_source=app.cli_source,
+                        cli_tag=cli_tag,
+                        patches_source=app.patches_source,
+                        patches_tag=patches_tag,
                     ))
                 continue
 
@@ -615,8 +619,8 @@ def main() -> int:
                 targets_list, err = download_single_target(
                     app=app,
                     arch=arch,
-                    cli_file=cli_file,
-                    patches_file=patches_file,
+                    cli_path=cli_path,
+                    patches_path=patches_path,
                     cli_tag=cli_tag,
                     patches_tag=patches_tag,
                     dry_run=args.dry_run
@@ -630,7 +634,11 @@ def main() -> int:
                         version="unknown",
                         arch=arch,
                         success=False,
-                        error_message=err or "Download failed"
+                        error_message=err or "Download failed",
+                        cli_source=app.cli_source,
+                        cli_tag=cli_tag,
+                        patches_source=app.patches_source,
+                        patches_tag=patches_tag,
                     ))
 
             group_end()
