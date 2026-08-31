@@ -17,7 +17,6 @@ from core.logger import log_info, log_warn, log_error
 BIN_DIR = Path(__file__).resolve().parent.parent / "bin"
 APK_EDITOR_JAR = BIN_DIR / "APKEditor.jar"
 APK_SIGNER_JAR = BIN_DIR / "apksigner.jar"
-APK_EDITOR_URL = "https://github.com/REAndroid/APKEditor/releases/download/V1.4.9/APKEditor-1.4.9.jar"
 
 def ensure_keystore(
     keystore_path: Path,
@@ -53,12 +52,34 @@ def ensure_keystore(
 
     return False
 
+def _resolve_apk_editor_asset() -> Optional[dict]:
+    """Resolve the latest APKEditor JAR asset from GitHub."""
+    from core.github import github_client
+    release = github_client.get_release("REAndroid/APKEditor", "latest")
+    if release:
+        for asset in release.get("assets", []):
+            name = asset.get("name", "")
+            if name.startswith("APKEditor") and name.endswith(".jar"):
+                return asset
+    return None
+
 def ensure_apk_editor() -> bool:
     if APK_EDITOR_JAR.is_file() and APK_EDITOR_JAR.stat().st_size > 0:
         return True
     APK_EDITOR_JAR.parent.mkdir(parents=True, exist_ok=True)
-    log_info("Downloading APKEditor.jar...", indent=2)
-    return http_client.download_file(APK_EDITOR_URL, APK_EDITOR_JAR)
+    asset = _resolve_apk_editor_asset()
+    if not asset:
+        log_error("Could not resolve latest APKEditor release from GitHub", indent=2)
+        return False
+    asset_name = asset.get("name", "APKEditor.jar")
+    display_name = f"REAndroid_{asset_name}"
+    tmp_path = APK_EDITOR_JAR.parent / asset_name
+    log_info(f"Downloading {display_name}...", indent=2)
+    if not http_client.download_file(asset.get("browser_download_url", ""), tmp_path):
+        return False
+    if tmp_path != APK_EDITOR_JAR:
+        shutil.move(str(tmp_path), str(APK_EDITOR_JAR))
+    return True
 
 def merge_bundle(
     bundle_path: Path,
