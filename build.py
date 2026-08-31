@@ -470,38 +470,61 @@ def main() -> int:
         download_targets: List[Dict[str, Any]] = []
         failed_downloads: List[BuildResult] = []
 
-        for index, app in enumerate(enabled_apps, 1):
-            group_start(f"Download [{index}/{len(enabled_apps)}]: {app.name}")
-            log_app_banner(index, len(enabled_apps), app.app_name, app.id)
+        total_download_tasks = len(enabled_apps) + 1
 
-            # Fetch Prebuilt CLI & Patches
+        # 1. Download Prebuilts (CLI & Patches)
+        group_start(f"Download [1/{total_download_tasks}]: Prebuilts (CLI & Patches)")
+        log_stage("Fetching Prebuilt CLI & Patches")
+
+        prebuilts_cache: Dict[Tuple[str, str, str, str], Tuple[Optional[Path], Optional[Path], str, str]] = {}
+        unique_prebuilts = list(dict.fromkeys(
+            (app.cli_source, app.cli_version, app.patches_source, app.patches_version)
+            for app in enabled_apps
+        ))
+
+        for cli_repo, cli_ver, patches_repo, patches_ver in unique_prebuilts:
             cli_jar, patch_file, cli_tag, patch_tag = github_client.get_prebuilts(
-                cli_repo=app.cli_source,
-                cli_tag=app.cli_version,
-                patches_repo=app.patches_source,
-                patches_tag=app.patches_version,
+                cli_repo=cli_repo,
+                cli_tag=cli_ver,
+                patches_repo=patches_repo,
+                patches_tag=patches_ver,
                 cli_dir=CLI_DIR,
                 patches_dir=PATCHES_DIR
             )
-
             if not cli_jar or not patch_file:
                 if args.dry_run:
                     cli_jar = CLI_DIR / "morphe-cli-mock.jar"
                     patch_file = PATCHES_DIR / "morphe-patches-mock.mpp"
                     cli_tag = "mock"
                     patch_tag = "mock"
-                else:
-                    group_end()
-                    for arch in app.arch:
-                        failed_downloads.append(BuildResult(
-                            app_name=app.app_name,
-                            id=app.id,
-                            version="unknown",
-                            arch=arch,
-                            success=False,
-                            error_message=f"Failed to fetch CLI/patches ({app.cli_source} / {app.patches_source})"
-                        ))
-                    continue
+            prebuilts_cache[(cli_repo, cli_ver, patches_repo, patches_ver)] = (
+                cli_jar, patch_file, cli_tag, patch_tag
+            )
+        group_end()
+
+        # 2. Download Stock APKs for each enabled app
+        for app_idx, app in enumerate(enabled_apps, 1):
+            task_idx = app_idx + 1
+            group_start(f"Download [{task_idx}/{total_download_tasks}]: {app.name}")
+            log_app_banner(app_idx, len(enabled_apps), app.app_name, app.id)
+
+            cli_jar, patch_file, cli_tag, patch_tag = prebuilts_cache.get(
+                (app.cli_source, app.cli_version, app.patches_source, app.patches_version),
+                (None, None, "", "")
+            )
+
+            if not cli_jar or not patch_file:
+                group_end()
+                for arch in app.arch:
+                    failed_downloads.append(BuildResult(
+                        app_name=app.app_name,
+                        id=app.id,
+                        version="unknown",
+                        arch=arch,
+                        success=False,
+                        error_message=f"Failed to fetch CLI/patches ({app.cli_source} / {app.patches_source})"
+                    ))
+                continue
 
             for arch in app.arch:
                 target_info, err = download_single_target(
