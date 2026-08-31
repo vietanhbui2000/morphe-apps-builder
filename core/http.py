@@ -89,6 +89,10 @@ class HttpClient:
                         solution = data.get("solution", {})
                         if solution.get("userAgent"):
                             self.user_agent = solution["userAgent"]
+                        if solution.get("cookies"):
+                            for c in solution["cookies"]:
+                                if HAS_REQUESTS and isinstance(c, dict) and c.get("name"):
+                                    self.session.cookies.set(c["name"], c.get("value", ""), domain=c.get("domain", ""))
                         return solution.get("response", "")
         except Exception as e:
             log_warn(f"FlareSolverr solve error: {e}", indent=2)

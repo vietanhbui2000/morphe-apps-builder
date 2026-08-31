@@ -41,12 +41,23 @@ class UptodownDownloader(BaseDownloader):
         if HAS_BS4:
             soup = BeautifulSoup(html, "html.parser")
             app_name_elem = soup.select_one("#detail-app-name")
-            data_code = app_name_elem.get("data-code") if app_name_elem else None
+            if app_name_elem:
+                data_code = app_name_elem.get("data-code")
+            if not data_code:
+                for elem in soup.select("[data-code], [data-appid], [data-app-id], [data-item-id]"):
+                    val = elem.get("data-code") or elem.get("data-appid") or elem.get("data-app-id") or elem.get("data-item-id")
+                    if val and val.isdigit():
+                        data_code = val
+                        break
 
         if not data_code:
-            match = re.search(r'data-code="(\d+)"', html)
+            match = re.search(r'data-(?:code|appid|app-id|item-id)="(\d+)"', html)
             if match:
                 data_code = match.group(1)
+            else:
+                match = re.search(r'["\'](?:item_id|app_id|data-code)["\']\s*[:=]\s*["\']?(\d+)', html)
+                if match:
+                    data_code = match.group(1)
 
         return clean_url, data_code
 
