@@ -74,7 +74,7 @@ class GitHubClient:
 
         return None
 
-    def download_asset(self, asset: dict, output_path: Path) -> bool:
+    def download_asset(self, asset: dict, output_path: Path, display_name: Optional[str] = None) -> bool:
         if output_path.is_file() and output_path.stat().st_size > 0:
             return True
 
@@ -87,7 +87,8 @@ class GitHubClient:
         if "api.github.com" in download_url and GITHUB_TOKEN:
             headers["Accept"] = "application/octet-stream"
 
-        log_info(f"Downloading {asset.get('name')}...", indent=2)
+        display = display_name or asset.get("name")
+        log_info(f"Downloading {display}...", indent=2)
         tmp_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
         try:
             if HAS_REQUESTS:
@@ -112,7 +113,7 @@ class GitHubClient:
                         tmp_path.rename(output_path)
                         return True
         except Exception as e:
-            log_warn(f"Failed to download asset {asset.get('name')}: {e}", indent=2)
+            log_warn(f"Failed to download asset {display}: {e}", indent=2)
         finally:
             if tmp_path.is_file():
                 tmp_path.unlink(missing_ok=True)
@@ -155,7 +156,9 @@ class GitHubClient:
 
         safe_cli_repo = cli_repo.replace("/", "_")
         cli_jar_path = cli_dir / f"{safe_cli_repo}_{cli_tag_name}.jar"
-        if not self.download_asset(cli_asset, cli_jar_path):
+        cli_owner = cli_repo.split("/")[0]
+        cli_display = f"{cli_owner}_{cli_asset['name']}"
+        if not self.download_asset(cli_asset, cli_jar_path, display_name=cli_display):
             return None, None, "", ""
 
         # 2. Patches
@@ -183,7 +186,9 @@ class GitHubClient:
         ext = ".mpp" if patches_asset["name"].endswith(".mpp") else ".jar"
         safe_patches_repo = patches_repo.replace("/", "_")
         patches_path = p_dir / f"{safe_patches_repo}_{patches_tag_name}{ext}"
-        if not self.download_asset(patches_asset, patches_path):
+        patches_owner = patches_repo.split("/")[0]
+        patches_display = f"{patches_owner}_{patches_asset['name']}"
+        if not self.download_asset(patches_asset, patches_path, display_name=patches_display):
             return None, None, "", ""
 
         return cli_jar_path, patches_path, cli_tag_name, patches_tag_name
