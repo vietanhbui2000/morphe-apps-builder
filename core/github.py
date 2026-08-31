@@ -6,6 +6,7 @@ Supports requests if available, with urllib fallback.
 
 import json
 import os
+import shutil
 import urllib.request
 from pathlib import Path
 from typing import Any, Optional, Tuple
@@ -98,7 +99,7 @@ class GitHubClient:
                             for chunk in r.iter_content(chunk_size=65536):
                                 if chunk:
                                     f.write(chunk)
-                        tmp_path.rename(output_path)
+                        shutil.move(str(tmp_path), str(output_path))
                         return True
             else:
                 req = urllib.request.Request(download_url, headers=headers)
@@ -110,7 +111,7 @@ class GitHubClient:
                                 if not chunk:
                                     break
                                 f.write(chunk)
-                        tmp_path.rename(output_path)
+                        shutil.move(str(tmp_path), str(output_path))
                         return True
         except Exception as e:
             log_warn(f"Failed to download asset {display}: {e}", indent=2)
@@ -180,7 +181,7 @@ class GitHubClient:
             patches_asset = patches_rel["assets"][0]
 
         if not patches_asset:
-            log_error(f"No patches (.mpp/.jar) asset found in {patches_repo} {patches_tag}", indent=2)
+            log_error(f"No patches (.mpp/.jar) asset found in {patches_source} {patches_tag}", indent=2)
             return None, None, "", ""
 
         ext = ".mpp" if patches_asset["name"].endswith(".mpp") else ".jar"
