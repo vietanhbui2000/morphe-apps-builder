@@ -6,7 +6,7 @@ Supports BeautifulSoup if installed, with regex fallback.
 
 import re
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from bs4 import BeautifulSoup
