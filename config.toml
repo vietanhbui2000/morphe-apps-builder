@@ -14,7 +14,6 @@ apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
 uptodown_url = "https://youtube.en.uptodown.com/android"
 apkpure_url = "https://apkpure.com/youtube-app/com.google.android.youtube"
 ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.youtube"
-patches_source = "MorpheApp/morphe-patches"
 included_patches = [
   "Add to queue",
   "Alternative thumbnails",
@@ -104,7 +103,6 @@ apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube-music/"
 uptodown_url = "https://youtube-music.en.uptodown.com/android"
 apkpure_url = "https://apkpure.com/youtube-music/com.google.android.apps.youtube.music"
 ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.apps.youtube.music"
-patches_source = "MorpheApp/morphe-patches"
 included_patches = [
   "Bypass certificate checks",
   "Change header",
