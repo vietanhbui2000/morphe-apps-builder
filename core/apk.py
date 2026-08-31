@@ -64,8 +64,8 @@ def merge_bundle(
     bundle_path: Path,
     output_path: Path,
     keystore_path: Optional[Path] = None,
-    keystore_password: str = "",
-    keystore_alias: str = ""
+    keystore_alias: str = "",
+    keystore_password: str = ""
 ) -> bool:
     """Merge a split APK bundle (.apkm, .xapk, or split zip) into a standalone APK."""
     if not ensure_apk_editor():
@@ -92,11 +92,17 @@ def merge_bundle(
 
         if temp_unsigned.is_file() and temp_unsigned.stat().st_size > 0:
             if keystore_path and keystore_path.is_file():
-                if sign_apk(temp_unsigned, keystore_path, keystore_password, keystore_alias, output_path):
+                if sign_apk(
+                    apk_path=temp_unsigned,
+                    keystore_path=keystore_path,
+                    keystore_alias=keystore_alias,
+                    keystore_password=keystore_password,
+                    output_path=output_path
+                ):
                     return True
             if output_path.is_file():
                 output_path.unlink()
-            temp_unsigned.rename(output_path)
+            shutil.move(str(temp_unsigned), str(output_path))
             return True
     except Exception as e:
         log_error(f"Error running APKEditor: {e}", indent=2)
@@ -164,7 +170,7 @@ def strip_archs(apk_path: Path, keep_arch: str, output_path: Path) -> bool:
         if tmp_out.is_file() and tmp_out.stat().st_size > 0:
             if output_path.is_file():
                 output_path.unlink()
-            tmp_out.rename(output_path)
+            shutil.move(str(tmp_out), str(output_path))
             return True
     except Exception as e:
         log_error(f"Failed to strip architectures for {keep_arch}: {e}", indent=2)
@@ -176,8 +182,8 @@ def strip_archs(apk_path: Path, keep_arch: str, output_path: Path) -> bool:
 def sign_apk(
     apk_path: Path,
     keystore_path: Path,
-    keystore_password: str,
     keystore_alias: str,
+    keystore_password: str,
     output_path: Optional[Path] = None
 ) -> bool:
     """Sign an APK using apksigner with automatic keystore type fallback."""
@@ -185,7 +191,11 @@ def sign_apk(
         log_error(f"apksigner.jar not found at {APK_SIGNER_JAR}", indent=2)
         return False
 
-    if not ensure_keystore(keystore_path, keystore_alias, keystore_password):
+    if not ensure_keystore(
+        keystore_path=keystore_path,
+        keystore_alias=keystore_alias,
+        keystore_password=keystore_password
+    ):
         log_error(f"Keystore file not available at {keystore_path}", indent=2)
         return False
 

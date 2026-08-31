@@ -286,7 +286,13 @@ def patch_single_target(
     if downloaded_file.suffix in (".apkm", ".xapk") or "bundle" in downloaded_file.name:
         merged_apk = stock_apk_base.parent / f"{stock_apk_base.name}.merged.apk"
         log_info(f"Merging split bundle {downloaded_file.name} to standalone APK...", indent=1)
-        if not merge_bundle(downloaded_file, merged_apk, keystore_path, general.keystore_password, general.keystore_alias):
+        if not merge_bundle(
+            bundle_path=downloaded_file,
+            output_path=merged_apk,
+            keystore_path=keystore_path,
+            keystore_alias=general.keystore_alias,
+            keystore_password=general.keystore_password,
+        ):
             return BuildResult(
                 app_name=app_name,
                 id=app.id,
@@ -318,8 +324,8 @@ def patch_single_target(
         output_apk=temp_patched,
         app_config=app,
         keystore_path=keystore_path,
+        keystore_alias=general.keystore_alias,
         keystore_password=general.keystore_password,
-        keystore_alias=general.keystore_alias
     )
 
     if not patch_success or not temp_patched.is_file():
@@ -344,7 +350,13 @@ def patch_single_target(
             temp_patched = stripped_apk
 
     log_info("Signing release APK...", indent=1)
-    if not sign_apk(temp_patched, keystore_path, general.keystore_password, general.keystore_alias, output_apk):
+    if not sign_apk(
+        apk_path=temp_patched,
+        keystore_path=keystore_path,
+        keystore_alias=general.keystore_alias,
+        keystore_password=general.keystore_password,
+        output_path=output_apk,
+    ):
         return BuildResult(
             app_name=app_name,
             id=app.id,

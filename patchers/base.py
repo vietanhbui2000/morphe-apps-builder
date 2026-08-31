@@ -34,8 +34,8 @@ class BasePatcher(ABC):
         output_apk: Path,
         app_config: AppConfig,
         keystore_path: Path,
-        keystore_password: str,
-        keystore_alias: str
+        keystore_alias: str,
+        keystore_password: str
     ) -> bool:
         """Run patching process and write final APK."""
         pass

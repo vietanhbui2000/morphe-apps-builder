@@ -132,8 +132,8 @@ class MorphePatcher(BasePatcher):
         output_apk: Path,
         app_config: AppConfig,
         keystore_path: Path,
-        keystore_password: str,
-        keystore_alias: str
+        keystore_alias: str,
+        keystore_password: str
     ) -> bool:
         output_apk.parent.mkdir(parents=True, exist_ok=True)
         temp_dir = Path(tempfile.mkdtemp(prefix="morphe_patch_"))
