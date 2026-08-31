@@ -86,11 +86,11 @@ See [CONFIG.md](CONFIG.md) for configuration schema and [KEYSTORE.md](KEYSTORE.m
 ### General Settings
 ```toml
 [general]
-default_cli_source = "MorpheApp/morphe-cli"
-default_patches_source = "MorpheApp/morphe-patches"
 keystore = "keystore.keystore"
 keystore_alias = "vietanhbui2000"
 keystore_password = "1234567890"
+default_cli_source = "MorpheApp/morphe-cli"
+default_patches_source = "MorpheApp/morphe-patches"
 ```
 
 ### Defining an App
@@ -100,12 +100,10 @@ enabled = true
 id = "com.google.android.youtube"
 version = "auto"                         # "auto" (highest compatible), "latest", or pinned (e.g. "21.34.243")
 arch = ["all"]                           # ["all"] for universal APK, or ["arm64-v8a", "armeabi-v7a"] for split APKs
-aurorastore = true
 apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
 uptodown_url = "https://youtube.en.uptodown.com/android"
 apkpure_url = "https://apkpure.com/youtube-app/com.google.android.youtube"
 ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.youtube"
-patches_source = "MorpheApp/morphe-patches"
 included_patches = [
   "Hide ads",
   "SponsorBlock",
@@ -145,17 +143,17 @@ morphe-apps-builder/
 │   ├── github.py               # GitHub API client (releases, .mpp/jar downloads)
 │   ├── http.py                 # HTTP client with FlareSolverr/CFB fallback
 │   ├── logger.py               # Structured console & GitHub Actions group logger
-│   └── models.py              # Data structures (GeneralConfig, AppConfig, BuildResult)
+│   └── models.py               # Data structures (GeneralConfig, AppConfig, BuildResult)
 │
 ├── downloaders/                # Downloader provider implementations (by fallback priority)
 │   ├── base.py                 # Abstract BaseDownloader interface
 │   ├── aurorastore.py          # Aurora Store / Google Play downloader
+│   ├── aurorastore_pb2.py      # Protobuf definitions for Google Play checkin
 │   ├── apkmirror.py            # APKMirror scraper (bundles & APKs, DPI/arch matching)
 │   ├── uptodown.py             # Uptodown scraper (versions API & downloads)
 │   ├── apkpure.py              # APKPure downloader
 │   ├── ia.py                   # Internet Archive downloader (ia_url)
-│   ├── direct.py               # Direct URL template downloader
-│   └── aurorastore_pb2.py      # Protobuf definitions for Google Play checkin
+│   └── direct.py               # Direct URL template downloader
 │
 ├── patchers/                   # Patcher provider implementations
 │   ├── base.py                 # Abstract BasePatcher interface
