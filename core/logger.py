@@ -4,7 +4,6 @@ Structured logger with ANSI colors and GitHub Actions group folding support.
 """
 
 import os
-import sys
 
 IS_GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
 

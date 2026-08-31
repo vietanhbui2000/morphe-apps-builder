@@ -9,7 +9,6 @@ import json
 import os
 import shutil
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -21,7 +20,7 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
-from core.logger import log_info, log_warn, log_error
+from core.logger import log_info, log_warn
 
 DEFAULT_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
 

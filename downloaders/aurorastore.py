@@ -5,11 +5,9 @@ authenticates with Google Play API, and downloads base or split APKs.
 """
 
 import base64
-import hashlib
 import json
 import os
 import random
-import sys
 import tempfile
 import time
 import urllib.request
