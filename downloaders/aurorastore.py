@@ -277,9 +277,14 @@ class AuroraStoreDownloader(BaseDownloader):
                 "Origin": "https://auroraoss.com",
                 "Referer": "https://auroraoss.com/",
             }
-            resp = session.post(dispenser_url, json=DEVICE_PROPERTIES, headers=headers, timeout=30)
-            resp.raise_for_status()
-            disp_data = resp.json()
+            try:
+                resp = session.post(dispenser_url, json=DEVICE_PROPERTIES, headers=headers, timeout=30)
+                resp.raise_for_status()
+                disp_data = resp.json()
+            except Exception as e:
+                log_warn(f"[AuroraStore] Dispenser auth failed: {e}", indent=2)
+                return None
+
             email = disp_data.get("email")
             auth_token = disp_data.get("authToken") or disp_data.get("auth")
             if not email or not auth_token:
