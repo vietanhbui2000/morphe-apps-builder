@@ -129,7 +129,7 @@ def download_single_target(
     Download phase for a single architecture target.
     Returns (target_info_dict, error_message).
     """
-    log_stage(f"Downloading {app.app_name} [{arch}]")
+    log_stage(f"Downloading {app.app_name} ({arch})")
 
     resolved_version = resolve_app_version(app, cli_jar, patch_file, dry_run=dry_run)
     if not resolved_version:
@@ -216,7 +216,7 @@ def patch_single_target(
     patches_source = target_info.get("patches_source", app.patches_source)
     patches_tag = target_info.get("patches_version", target_info.get("patches_tag", target_info.get("patch_tag", "")))
 
-    log_stage(f"Patching {app_name} [{arch}] v{version}")
+    log_stage(f"Patching {app_name} ({arch}) v{version}")
 
     if dry_run:
         log_info(f"[DRY-RUN] Would patch {app_name} v{version} ({arch})", indent=1)
@@ -369,7 +369,7 @@ def write_build_summary(results: List[BuildResult]) -> int:
     for r in results:
         status_icon = f"{Colors.GREEN}✓ SUCCESS{Colors.RESET}" if r.success else f"{Colors.RED}✗ FAILED{Colors.RESET}"
         detail = f"-> {r.output_apk.name}" if r.output_apk else f"({r.error_message})"
-        print(f"[{status_icon}] {r.app_name} [{r.arch}] v{r.version} {detail}")
+        print(f"[{status_icon}] {r.app_name} ({r.arch}) v{r.version} {detail}")
 
     # Write release.md for GitHub Releases
     release_md = ROOT_DIR / "release.md"
@@ -465,7 +465,7 @@ def main() -> int:
         failed_downloads: List[BuildResult] = []
 
         for index, app in enumerate(enabled_apps, 1):
-            group_start(f"Download: {app.name} ({index}/{len(enabled_apps)})")
+            group_start(f"Download [{index}/{len(enabled_apps)}]: {app.name}")
             log_app_banner(index, len(enabled_apps), app.app_name, app.id)
 
             # Fetch Prebuilt CLI & Patches
@@ -528,7 +528,7 @@ def main() -> int:
             log_success(f"Download phase complete. Ready to patch {len(download_targets)} target(s).")
             if failed_downloads:
                 for f in failed_downloads:
-                    log_warn(f"Failed download: {f.app_name} [{f.arch}] ({f.error_message})")
+                    log_warn(f"Failed download: {f.app_name} ({f.arch}) ({f.error_message})")
             return 0 if download_targets else 1
 
     # --------------------------------------------------------------------------
@@ -548,7 +548,7 @@ def main() -> int:
         if not app:
             continue
 
-        group_start(f"Patch: {app.name} [{t['arch']}] ({index}/{len(targets_to_patch)})")
+        group_start(f"Patch [{index}/{len(targets_to_patch)}]: {app.name} ({t['arch']})")
         res = patch_single_target(
             target_info=t,
             app=app,

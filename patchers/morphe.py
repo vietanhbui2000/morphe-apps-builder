@@ -32,62 +32,60 @@ class MorphePatcher(BasePatcher):
         app_id: str
     ) -> Optional[str]:
         """Query Morphe CLI to find the highest compatible version for a package."""
-        # 1. Try list-versions command
-        cmd_list_ver = [
-            "java", "-jar", str(cli_jar),
-            "list-versions",
-            "-p", str(patch_file),
-            "-f", app_id
-        ]
-        try:
-            res = subprocess.run(cmd_list_ver, capture_output=True, text=True, check=False)
-            if res.returncode == 0 and res.stdout:
-                matches = re.findall(r"(\d+(\.\d+)+)", res.stdout)
-                if matches:
-                    versions = list(set([m[0] for m in matches]))
-                    versions.sort(key=_version_key, reverse=True)
-                    return versions[0]
-        except Exception:
-            pass
+        # 1. Try list-versions commands (--patches and -p)
+        for p_flag in ("--patches", "-p"):
+            cmd = [
+                "java", "-jar", str(cli_jar),
+                "list-versions",
+                p_flag, str(patch_file),
+                "-f", app_id
+            ]
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, check=False)
+                if res.returncode == 0 and res.stdout:
+                    matches = re.findall(r"(\d+(\.\d+)+)", res.stdout)
+                    if matches:
+                        versions = list(set([m[0] for m in matches]))
+                        versions.sort(key=_version_key, reverse=True)
+                        return versions[0]
+            except Exception:
+                pass
 
-        # 2. Fallback to list-patches
-        cmd_list_patches = [
-            "java", "-jar", str(cli_jar),
-            "list-patches",
-            "-p", str(patch_file),
-            "--with-packages",
-            "--with-versions"
-        ]
-        try:
-            res = subprocess.run(cmd_list_patches, capture_output=True, text=True, check=False)
-            if res.returncode == 0 and res.stdout:
-                lines = res.stdout.splitlines()
-                found_pkg = False
-                in_versions = False
-                compatible_versions = []
+        # 2. Fallback to list-patches commands
+        for cmd_list_patches in (
+            ["java", "-jar", str(cli_jar), "list-patches", "-p", str(patch_file), "-f", app_id, "--with-packages", "--with-versions"],
+            ["java", "-jar", str(cli_jar), "list-patches", "-p", str(patch_file), "--with-packages", "--with-versions"],
+        ):
+            try:
+                res = subprocess.run(cmd_list_patches, capture_output=True, text=True, check=False)
+                if res.returncode == 0 and res.stdout:
+                    lines = res.stdout.splitlines()
+                    found_pkg = False
+                    in_versions = False
+                    compatible_versions = []
 
-                for line in lines:
-                    line_s = line.strip()
-                    if line_s.startswith("Package name:"):
-                        curr_pkg = line_s.split(":", 1)[1].strip()
-                        found_pkg = (curr_pkg == app_id)
-                        in_versions = False
-                    elif found_pkg and line_s.startswith("Compatible versions:"):
-                        in_versions = True
-                    elif in_versions:
-                        if not line_s or line_s.startswith("Index:") or line_s.startswith("Name:") or line_s.startswith("Package"):
+                    for line in lines:
+                        line_s = line.strip()
+                        if line_s.startswith("Package name:"):
+                            curr_pkg = line_s.split(":", 1)[1].strip()
+                            found_pkg = (curr_pkg == app_id)
                             in_versions = False
-                        else:
-                            ver_match = re.match(r"^(\d+(\.\d+)+)", line_s)
-                            if ver_match:
-                                compatible_versions.append(ver_match.group(1))
+                        elif found_pkg and line_s.startswith("Compatible versions:"):
+                            in_versions = True
+                        elif in_versions:
+                            if not line_s or line_s.startswith("Index:") or line_s.startswith("Name:") or line_s.startswith("Package"):
+                                in_versions = False
+                            else:
+                                ver_match = re.match(r"^(\d+(\.\d+)+)", line_s)
+                                if ver_match:
+                                    compatible_versions.append(ver_match.group(1))
 
-                if compatible_versions:
-                    compatible_versions = list(set(compatible_versions))
-                    compatible_versions.sort(key=_version_key, reverse=True)
-                    return compatible_versions[0]
-        except Exception as e:
-            log_warn(f"Error querying compatible versions: {e}", indent=2)
+                    if compatible_versions:
+                        compatible_versions = list(set(compatible_versions))
+                        compatible_versions.sort(key=_version_key, reverse=True)
+                        return compatible_versions[0]
+            except Exception:
+                pass
 
         return None
 

@@ -23,28 +23,28 @@ class Colors:
 
 def log_info(msg: str, indent: int = 0) -> None:
     pad = "  " * indent
-    print(f"{pad}{Colors.CYAN}[*]{Colors.RESET} {msg}")
+    print(f"{pad}{Colors.CYAN}[*]{Colors.RESET} {msg}", flush=True)
 
 def log_success(msg: str, indent: int = 0) -> None:
     pad = "  " * indent
-    print(f"{pad}{Colors.GREEN}[+]{Colors.RESET} {msg}")
+    print(f"{pad}{Colors.GREEN}[+]{Colors.RESET} {msg}", flush=True)
 
 def log_warn(msg: str, indent: int = 0) -> None:
     pad = "  " * indent
-    print(f"{pad}{Colors.YELLOW}[!]{Colors.RESET} {msg}", file=sys.stderr)
+    print(f"{pad}{Colors.YELLOW}[!]{Colors.RESET} {msg}", flush=True)
 
 def log_error(msg: str, indent: int = 0) -> None:
     pad = "  " * indent
-    print(f"{pad}{Colors.RED}[-]{Colors.RESET} {msg}", file=sys.stderr)
+    print(f"{pad}{Colors.RED}[-]{Colors.RESET} {msg}", flush=True)
 
 def log_stage(msg: str) -> None:
-    print(f"\n{Colors.BOLD}{Colors.BLUE}==>{Colors.RESET} {Colors.BOLD}{msg}{Colors.RESET}")
+    print(f"\n{Colors.BOLD}{Colors.BLUE}==>{Colors.RESET} {Colors.BOLD}{msg}{Colors.RESET}", flush=True)
 
 def log_app_banner(index: int, total: int, app_name: str, app_id: str) -> None:
     line = "=" * 70
-    print(f"\n{Colors.BOLD}{Colors.CYAN}{line}")
-    print(f"[{index}/{total}] Processing {app_name} ({app_id})")
-    print(f"{line}{Colors.RESET}")
+    print(f"\n{Colors.BOLD}{Colors.CYAN}{line}", flush=True)
+    print(f"[{index}/{total}] Processing {app_name} ({app_id})", flush=True)
+    print(f"{line}{Colors.RESET}", flush=True)
 
 def group_start(title: str) -> None:
     if IS_GITHUB_ACTIONS:
