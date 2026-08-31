@@ -166,10 +166,10 @@ class MorphePatcher(BasePatcher):
         if keystore_path.is_file():
             cmd.extend([
                 "--keystore", str(keystore_path),
+                "--keystore-entry-alias", keystore_alias,
+                "--signer", keystore_alias,
                 "--keystore-password", keystore_password,
                 "--keystore-entry-password", keystore_password,
-                "--keystore-entry-alias", keystore_alias,
-                "--signer", keystore_alias
             ])
 
         cmd.extend([
