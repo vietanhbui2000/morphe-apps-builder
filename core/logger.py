@@ -38,11 +38,11 @@ def log_error(msg: str, indent: int = 0) -> None:
     print(f"{pad}{Colors.RED}[-]{Colors.RESET} {msg}", flush=True)
 
 def log_stage(msg: str) -> None:
-    print(f"\n{Colors.BOLD}{Colors.BLUE}==>{Colors.RESET} {Colors.BOLD}{msg}{Colors.RESET}", flush=True)
+    print(f"{Colors.BOLD}{Colors.BLUE}==>{Colors.RESET} {Colors.BOLD}{msg}{Colors.RESET}", flush=True)
 
 def log_app_banner(index: int, total: int, app_name: str, app_id: str) -> None:
     line = "=" * 70
-    print(f"\n{Colors.BOLD}{Colors.CYAN}{line}", flush=True)
+    print(f"{Colors.BOLD}{Colors.CYAN}{line}", flush=True)
     print(f"[{index}/{total}] Processing {app_name} ({app_id})", flush=True)
     print(f"{line}{Colors.RESET}", flush=True)
 
