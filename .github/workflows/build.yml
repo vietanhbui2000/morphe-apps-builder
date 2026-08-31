@@ -121,6 +121,6 @@ jobs:
           cp -f release.tmp release.md
           git add release.md
           if ! git diff --cached --quiet; then
-            git commit -m "Update release metadata [${{ steps.tag_gen.outputs.RELEASE_TAG }}]"
+            git commit -m "Release ${{ steps.tag_gen.outputs.RELEASE_TAG }}"
             git push origin HEAD:releaselog
           fi
