@@ -91,9 +91,8 @@ def resolve_app_version(
 
     # Try resolving from patch bundle compatibility list
     if cli_jar.is_file() and patch_file.is_file():
-        supported_versions = morphe_patcher.list_versions(cli_jar, patch_file, app.id)
-        if supported_versions:
-            resolved = supported_versions[-1]
+        resolved = morphe_patcher.get_compatible_version(cli_jar, patch_file, app.id)
+        if resolved:
             log_success(f"Resolved compatible version from patch bundle: {resolved}", indent=1)
             return resolved
 
