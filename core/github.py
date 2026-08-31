@@ -122,10 +122,10 @@ class GitHubClient:
 
     def get_prebuilts(
         self,
-        cli_repo: str,
-        cli_tag: str,
-        patches_repo: str,
-        patches_tag: str,
+        cli_source: str,
+        cli_version: str,
+        patches_source: str,
+        patches_version: str,
         cli_dir: Path,
         patches_dir: Optional[Path] = None
     ) -> Tuple[Optional[Path], Optional[Path], str, str]:
@@ -134,12 +134,12 @@ class GitHubClient:
         p_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. CLI
-        cli_rel = self.get_release(cli_repo, cli_tag)
+        cli_rel = self.get_release(cli_source, cli_version)
         if not cli_rel:
-            log_error(f"Could not find CLI release for {cli_repo} ({cli_tag})", indent=2)
+            log_error(f"Could not find CLI release for {cli_source} ({cli_version})", indent=2)
             return None, None, "", ""
 
-        cli_tag_name = cli_rel.get("tag_name", "")
+        cli_tag = cli_rel.get("tag_name", "")
         cli_asset = None
         for a in cli_rel.get("assets", []):
             name = a.get("name", "")
@@ -151,23 +151,23 @@ class GitHubClient:
             cli_asset = cli_rel["assets"][0]
 
         if not cli_asset:
-            log_error(f"No JAR asset found in CLI release {cli_repo} {cli_tag_name}", indent=2)
+            log_error(f"No JAR asset found in CLI release {cli_source} {cli_tag}", indent=2)
             return None, None, "", ""
 
-        safe_cli_repo = cli_repo.replace("/", "_")
-        cli_jar_path = cli_dir / f"{safe_cli_repo}_{cli_tag_name}.jar"
-        cli_owner = cli_repo.split("/")[0]
+        safe_cli_source = cli_source.replace("/", "_")
+        cli_file = cli_dir / f"{safe_cli_source}_{cli_tag}.jar"
+        cli_owner = cli_source.split("/")[0]
         cli_display = f"{cli_owner}_{cli_asset['name']}"
-        if not self.download_asset(cli_asset, cli_jar_path, display_name=cli_display):
+        if not self.download_asset(cli_asset, cli_file, display_name=cli_display):
             return None, None, "", ""
 
         # 2. Patches
-        patches_rel = self.get_release(patches_repo, patches_tag)
+        patches_rel = self.get_release(patches_source, patches_version)
         if not patches_rel:
-            log_error(f"Could not find patches release for {patches_repo} ({patches_tag})", indent=2)
+            log_error(f"Could not find patches release for {patches_source} ({patches_version})", indent=2)
             return None, None, "", ""
 
-        patches_tag_name = patches_rel.get("tag_name", "")
+        patches_tag = patches_rel.get("tag_name", "")
         patches_asset = None
         for a in patches_rel.get("assets", []):
             name = a.get("name", "")
@@ -180,17 +180,17 @@ class GitHubClient:
             patches_asset = patches_rel["assets"][0]
 
         if not patches_asset:
-            log_error(f"No patch (.mpp/.jar) asset found in {patches_repo} {patches_tag_name}", indent=2)
+            log_error(f"No patches (.mpp/.jar) asset found in {patches_repo} {patches_tag}", indent=2)
             return None, None, "", ""
 
         ext = ".mpp" if patches_asset["name"].endswith(".mpp") else ".jar"
-        safe_patches_repo = patches_repo.replace("/", "_")
-        patches_path = p_dir / f"{safe_patches_repo}_{patches_tag_name}{ext}"
-        patches_owner = patches_repo.split("/")[0]
+        safe_patches_source = patches_source.replace("/", "_")
+        patches_file = p_dir / f"{safe_patches_source}_{patches_tag}{ext}"
+        patches_owner = patches_source.split("/")[0]
         patches_display = f"{patches_owner}_{patches_asset['name']}"
-        if not self.download_asset(patches_asset, patches_path, display_name=patches_display):
+        if not self.download_asset(patches_asset, patches_file, display_name=patches_display):
             return None, None, "", ""
 
-        return cli_jar_path, patches_path, cli_tag_name, patches_tag_name
+        return cli_file, patches_file, cli_tag, patches_tag
 
 github_client = GitHubClient()

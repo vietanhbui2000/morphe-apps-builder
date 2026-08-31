@@ -18,8 +18,8 @@ class BasePatcher(ABC):
     @abstractmethod
     def get_compatible_version(
         self,
-        cli_jar: Path,
-        patch_file: Path,
+        cli_file: Path,
+        patches_file: Path,
         app_id: str
     ) -> Optional[str]:
         """Query patch bundle to find the latest supported version for a package."""
@@ -28,8 +28,8 @@ class BasePatcher(ABC):
     @abstractmethod
     def patch(
         self,
-        cli_jar: Path,
-        patch_files: list[Path],
+        cli_file: Path,
+        patches_files: list[Path],
         stock_apk: Path,
         output_apk: Path,
         app_config: AppConfig,

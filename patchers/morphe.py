@@ -27,17 +27,17 @@ class MorphePatcher(BasePatcher):
 
     def get_compatible_version(
         self,
-        cli_jar: Path,
-        patch_file: Path,
+        cli_file: Path,
+        patches_file: Path,
         app_id: str
     ) -> Optional[str]:
         """Query Morphe CLI to find the highest compatible version for a package."""
         # 1. Try list-versions commands (--patches and -p)
         for p_flag in ("--patches", "-p"):
             cmd = [
-                "java", "-jar", str(cli_jar),
+                "java", "-jar", str(cli_file),
                 "list-versions",
-                p_flag, str(patch_file),
+                p_flag, str(patches_file),
                 "-f", app_id
             ]
             try:
@@ -53,8 +53,8 @@ class MorphePatcher(BasePatcher):
 
         # 2. Fallback to list-patches commands
         for cmd_list_patches in (
-            ["java", "-jar", str(cli_jar), "list-patches", "-p", str(patch_file), "-f", app_id, "--with-packages", "--with-versions"],
-            ["java", "-jar", str(cli_jar), "list-patches", "-p", str(patch_file), "--with-packages", "--with-versions"],
+            ["java", "-jar", str(cli_file), "list-patches", "-p", str(patches_file), "-f", app_id, "--with-packages", "--with-versions"],
+            ["java", "-jar", str(cli_file), "list-patches", "-p", str(patches_file), "--with-packages", "--with-versions"],
         ):
             try:
                 res = subprocess.run(cmd_list_patches, capture_output=True, text=True, check=False)
@@ -126,8 +126,8 @@ class MorphePatcher(BasePatcher):
 
     def patch(
         self,
-        cli_jar: Path,
-        patch_files: list[Path],
+        cli_file: Path,
+        patches_files: list[Path],
         stock_apk: Path,
         output_apk: Path,
         app_config: AppConfig,
@@ -140,11 +140,11 @@ class MorphePatcher(BasePatcher):
         options_file = temp_dir / "options.json"
 
         cmd = [
-            "java", "-jar", str(cli_jar),
+            "java", "-jar", str(cli_file),
             "patch"
         ]
 
-        for pf in patch_files:
+        for pf in patches_files:
             cmd.extend(["-p", str(pf)])
 
         if app_config.options and self._build_options_json(app_config.options, options_file):
