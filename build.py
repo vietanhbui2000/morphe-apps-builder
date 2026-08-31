@@ -428,40 +428,54 @@ def write_build_summary(results: List[BuildResult]) -> int:
     repo = _get_github_repo()
     release_tag = os.environ.get("RELEASE_TAG", "").strip()
 
-    successful_builds = [r for r in results if r.success]
-    if successful_builds:
-        app_blocks = []
-        for r in successful_builds:
-            arch_str = "" if r.arch in ("all", "universal", "") else f" ({r.arch})"
+    app_blocks = []
+    for app_name, app_results in grouped.items():
+        success_results = [r for r in app_results if r.success]
+        if not success_results:
+            continue
 
+        first_r = success_results[0]
+        ver_tag = f"v{first_r.version}" if not first_r.version.startswith("v") else first_r.version
+
+        if len(success_results) == 1:
+            r = success_results[0]
+            arch_prefix = "" if r.arch in ("all", "universal", "") else f"({r.arch}) "
             dl_btn = ""
             if repo and release_tag:
-                if r.output_apk:
-                    apk_name = r.output_apk.name
-                else:
-                    arch_suffix = "" if r.arch in ("all", "universal", "") else f"_{r.arch}"
-                    apk_name = f"{r.app_name}_v{r.version}{arch_suffix}.apk"
+                apk_name = r.output_apk.name if r.output_apk else f"{r.app_name}_{ver_tag}{'' if r.arch in ('all', 'universal', '') else f'_{r.arch}'}.apk"
                 dl_url = f"https://github.com/{repo}/releases/download/{release_tag}/{apk_name}"
-                dl_btn = f" [↓]({dl_url})"
+                dl_btn = f"[↓]({dl_url})"
+            targets_str = f"{arch_prefix}{dl_btn}".strip()
+            header = f"{app_name}: {ver_tag} {targets_str}".rstrip() + "  "
+        else:
+            target_entries = []
+            for r in success_results:
+                dl_btn = ""
+                if repo and release_tag:
+                    apk_name = r.output_apk.name if r.output_apk else f"{r.app_name}_{ver_tag}_{r.arch}.apk"
+                    dl_url = f"https://github.com/{repo}/releases/download/{release_tag}/{apk_name}"
+                    dl_btn = f" [↓]({dl_url})"
+                target_entries.append(f"({r.arch}){dl_btn}")
+            targets_str = " | ".join(target_entries)
+            header = f"{app_name}: {ver_tag} {targets_str}  "
 
-            header = f"{r.app_name}{arch_str}: {r.version}{dl_btn}  "
+        cli_link = f"[{first_r.cli_tag}](https://github.com/{first_r.cli_source}/releases/tag/{first_r.cli_tag})" if first_r.cli_tag else ""
+        cli_str = f"{first_r.cli_source} {cli_link}".strip()
 
-            cli_link = f"[{r.cli_tag}](https://github.com/{r.cli_source}/releases/tag/{r.cli_tag})" if r.cli_tag else ""
-            cli_str = f"{r.cli_source} {cli_link}".strip()
+        patches_link = f"[{first_r.patches_tag}](https://github.com/{first_r.patches_source}/releases/tag/{first_r.patches_tag})" if first_r.patches_tag else ""
+        patches_str = f"{first_r.patches_source} {patches_link}".strip()
 
-            patches_link = f"[{r.patches_tag}](https://github.com/{r.patches_source}/releases/tag/{r.patches_tag})" if r.patches_tag else ""
-            patches_str = f"{r.patches_source} {patches_link}".strip()
+        sub = f"└ {cli_str} + {patches_str}"
+        app_blocks.append(f"{header}\n{sub}")
 
-            sub = f"└ {cli_str} + {patches_str}"
-            app_blocks.append(f"{header}\n{sub}")
+    if app_blocks:
         sections.append("\n\n".join(app_blocks))
-
         sections.append("ℹ Install [MicroG ↗](https://github.com/MorpheApp/MicroG-RE/) to enable Google account authentication and services for Morphe apps.")
 
     release_md.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
     log_success(f"Wrote release notes to {release_md.name}")
 
-    return 0 if successful_builds else 1
+    return 0 if any(r.success for r in results) else 1
 
 
 def main() -> int:
