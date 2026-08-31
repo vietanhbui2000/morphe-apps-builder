@@ -1,0 +1,130 @@
+name: Build & Release APKs
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APKs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      TZ: Asia/Ho_Chi_Minh
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "21"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Start FlareSolverr Service
+        run: |
+          docker run -d --name flaresolverr -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
+          echo "Waiting for FlareSolverr to become ready..."
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:8191/ > /dev/null 2>&1; then
+              echo "FlareSolverr is ready."
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Download Prebuilts & Stock APKs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python build.py --download-only
+
+      - name: Stop FlareSolverr Service
+        if: always()
+        run: |
+          docker stop flaresolverr || true
+          docker rm flaresolverr || true
+
+      - name: Generate Release Tag
+        id: tag_gen
+        run: |
+          RELEASE_TAG="$(date +'%Y.%m.%d-%H%M')"
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Prune Old Releases & Orphaned Tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Cleaning older releases (keeping 9 most recent)..."
+          ALL_TAGS=$(gh release list --limit 100 --json tagName -q '.[].tagName')
+          TOTAL=$(echo "$ALL_TAGS" | grep -v '^$' | wc -l | tr -d ' ')
+          if [ "$TOTAL" -gt 9 ]; then
+            echo "$ALL_TAGS" | tail -n +10 | while read -r old_tag; do
+              [ -n "$old_tag" ] || continue
+              echo "Deleting old release: $old_tag"
+              gh release delete "$old_tag" --yes || true
+            done
+          fi
+
+          echo "Pruning orphaned git tags..."
+          git fetch --tags
+          RELEASE_TAGS=$(gh release list --limit 100 --json tagName -q '.[].tagName')
+          git tag -l | while read -r t; do
+            if ! echo "$RELEASE_TAGS" | grep -q "^${t}$"; then
+              git push --delete origin "$t" 2>/dev/null || true
+              git tag -d "$t" 2>/dev/null || true
+            fi
+          done
+
+      - name: Patch & Sign APKs
+        run: python build.py --patch-only
+
+      - name: Capture Release Notes
+        id: release_notes
+        run: |
+          DELIM="$(openssl rand -hex 8)"
+          echo "NOTES<<${DELIM}" >> "$GITHUB_OUTPUT"
+          cat release.md >> "$GITHUB_OUTPUT"
+          echo "${DELIM}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "Release ${{ steps.tag_gen.outputs.RELEASE_TAG }}"
+          TAG: "${{ steps.tag_gen.outputs.RELEASE_TAG }}"
+          NOTES: "${{ steps.release_notes.outputs.NOTES }}"
+        run: |
+          if [ -d "output" ] && [ "$(ls -A output/*.apk 2>/dev/null)" ]; then
+            gh release create "$TAG" output/*.apk \
+              --title "$TITLE" \
+              --notes "$NOTES"
+          else
+            echo "No APKs found in output directory to publish."
+            exit 1
+          fi
+
+      - name: Commit release.md to releaselog branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -f releaselog 2>/dev/null || git switch --orphan releaselog
+          cp -f release.md release.md
+          git add release.md
+          if ! git diff --cached --quiet; then
+            git commit -m "Update release metadata [${{ steps.tag_gen.outputs.RELEASE_TAG }}]"
+            git push origin HEAD:releaselog
+          fi
