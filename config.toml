@@ -152,10 +152,10 @@ enabled = true
 id = "tv.twitch.android.app"
 version = "auto"
 arch = ["universal"]
-patches_source = "arandomhooman/hoomans-morphe-patches"
 apkmirror_url = "https://www.apkmirror.com/apk/twitch-interactive-inc/twitch/"
 uptodown_url = "https://twitch.en.uptodown.com/android"
 apkpure_url = "https://apkpure.com/twitch-livestream-multiplayer-games-esports-app/tv.twitch.android.app"
+patches_source = "arandomhooman/hoomans-morphe-patches"
 included_patches = [
   "7TV and BTTV emotes",
   "Auto claim channel points",
@@ -170,10 +170,10 @@ enabled = true
 id = "com.zhiliaoapp.musically"
 version = "auto"
 arch = ["universal"]
-patches_source = "icysymmetra/tiktok-patches-for-morphe"
 apkmirror_url = "https://www.apkmirror.com/apk/tiktok-pte-ltd/tik-tok-including-musical-ly/"
 uptodown_url = "https://tiktok.en.uptodown.com/android"
 apkpure_url = "https://apkpure.com/tiktok-app/com.zhiliaoapp.musically"
+patches_source = "icysymmetra/tiktok-patches-for-morphe"
 included_patches = [
   "Always show publish date",
   "Copy comments without username",
@@ -214,9 +214,9 @@ enabled = true
 id = "com.cloudflare.onedotonedotonedotone"
 version = "auto"
 arch = ["universal"]
-patches_source = "rushiranpise/morphe-patches"
 apkmirror_url = "https://www.apkmirror.com/apk/cloudflare/1-1-1-1-faster-safer-internet/"
 uptodown_url = "https://1-1-1-1.en.uptodown.com/android"
+patches_source = "rushiranpise/morphe-patches"
 included_patches = [
   "Disable Analytics / Telemetry",
   "Spoof WARP+ Unlimited UI"
@@ -230,9 +230,9 @@ enabled = true
 id = "ch.protonvpn.android"
 version = "auto"
 arch = ["universal"]
-patches_source = "hoo-dles/morphe-patches"
 apkmirror_url = "https://www.apkmirror.com/apk/proton-technologies-ag/protonvpn-secure-and-free-vpn/"
 uptodown_url = "https://protonvpn.en.uptodown.com/android"
+patches_source = "hoo-dles/morphe-patches"
 included_patches = [
   "Remove delay",
   "Unlock LAN connections",

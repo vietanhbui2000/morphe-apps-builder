@@ -64,15 +64,6 @@ The section header (`[YouTube]`, `[YouTube-Music]`, etc.) directly defines the a
 | `arch` | `list[string]` | `["universal"]` | Target architectures to build. Supported values:<br>• `["universal"]`: Builds a single universal APK.<br>• `["all"]`: Dynamically builds universal APK plus individual APKs for all detected architectures.<br>• `["arm64-v8a", "armeabi-v7a"]`: Builds individual APKs for specified architectures.<br>• `["x86_64"]`, `["x86"]`. |
 | `dpi` | `string` | `""` | Optional DPI selector for APKMirror (e.g. `"nodpi"`, `"anydpi"`, `"120-640dpi"`). |
 
-### Patcher & Prebuilts Overrides
-
-| Key | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `cli_source` | `string` | `general.default_cli_source` | Override CLI GitHub repository for this specific app. |
-| `cli_version` | `string` | `"latest"` | CLI release tag (`"latest"`, `"prerelease"`, or specific tag e.g. `"v1.14.0"`). |
-| `patches_source` | `string` | `general.default_patches_source` | Override patches GitHub repository for this specific app. |
-| `patches_version` | `string` | `"latest"` | Patch release tag (`"latest"`, `"prerelease"`, or specific tag e.g. `"v1.40.0"`). |
-
 ### Download Sources (Fallback Chain)
 
 The builder attempts downloaders in priority order based on which URLs are provided:
@@ -86,6 +77,15 @@ The builder attempts downloaders in priority order based on which URLs are provi
 | `apkpure_url` | APKPure app URL. Downloads APK or `.xapk` bundles. |
 | `ia_url` | Internet Archive directory URL containing pre-uploaded stock APKs. |
 | `direct_url` | Direct download URL. Supports `{version}` and `{arch}` template variables. |
+
+### Patcher & Prebuilts Overrides
+
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `cli_source` | `string` | `general.default_cli_source` | Override CLI GitHub repository for this specific app. |
+| `cli_version` | `string` | `"latest"` | CLI release tag (`"latest"`, `"prerelease"`, or specific tag e.g. `"v1.14.0"`). |
+| `patches_source` | `string` | `general.default_patches_source` | Override patches GitHub repository for this specific app. |
+| `patches_version` | `string` | `"latest"` | Patch release tag (`"latest"`, `"prerelease"`, or specific tag e.g. `"v1.40.0"`). |
 
 ### Patch Rules
 
@@ -138,13 +138,13 @@ enabled = true
 id = "com.google.android.youtube"
 version = "auto"
 arch = ["universal"]
+apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
+uptodown_url = "https://youtube.en.uptodown.com/android"
+ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.youtube"
 cli_source = "MorpheApp/morphe-cli"
 cli_version = "latest"
 patches_source = "MorpheApp/morphe-patches"
 patches_version = "latest"
-apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
-uptodown_url = "https://youtube.en.uptodown.com/android"
-ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.youtube"
 exclusive_patches = false
 included_patches = [
   "Add to queue",
