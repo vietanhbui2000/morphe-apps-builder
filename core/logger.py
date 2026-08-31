@@ -10,15 +10,12 @@ IS_GITHUB_ACTIONS = os.environ.get("GITHUB_ACTIONS") == "true"
 class Colors:
     RESET = "\033[0m"
     BOLD = "\033[1m"
-    DIM = "\033[2m"
-    
     RED = "\033[91m"
     GREEN = "\033[92m"
     YELLOW = "\033[93m"
     BLUE = "\033[94m"
     MAGENTA = "\033[95m"
     CYAN = "\033[96m"
-    WHITE = "\033[97m"
 
 def log_info(msg: str, indent: int = 0) -> None:
     pad = "  " * indent
@@ -39,10 +36,10 @@ def log_error(msg: str, indent: int = 0) -> None:
 def log_stage(msg: str) -> None:
     print(f"{Colors.BOLD}{Colors.BLUE}==>{Colors.RESET} {Colors.BOLD}{msg}{Colors.RESET}", flush=True)
 
-def log_app_banner(index: int, total: int, app_name: str, app_id: str) -> None:
+def log_app_banner(index: int, total: int, name: str, app_id: str) -> None:
     line = "=" * 70
     print(f"{Colors.BOLD}{Colors.CYAN}{line}", flush=True)
-    print(f"[{index}/{total}] Processing {app_name} ({app_id})", flush=True)
+    print(f"[{index}/{total}] Processing {name} ({app_id})", flush=True)
     print(f"{line}{Colors.RESET}", flush=True)
 
 def group_start(title: str) -> None:

@@ -21,7 +21,6 @@ class GeneralConfig:
 class AppConfig:
     name: str
     id: str
-    app_name: str
     enabled: bool = True
     version: str = "auto"
     arch: list[str] = field(default_factory=lambda: ["universal"])
@@ -45,12 +44,12 @@ class AppConfig:
 
 @dataclass
 class BuildResult:
-    app_name: str
+    name: str
     id: str
     version: str
     arch: str
     success: bool
-    output_apk: Optional[Path] = None
+    output_path: Optional[Path] = None
     error_message: Optional[str] = None
     cli_source: str = ""
     cli_tag: str = ""

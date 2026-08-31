@@ -66,9 +66,9 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
     # General configuration
     gen_data = data.get("general", {})
     general = GeneralConfig(
-        keystore=gen_data.get("keystore", gen_data.get("keystore_file", "keystore.keystore")),
+        keystore=gen_data.get("keystore", "keystore.keystore"),
         keystore_alias=gen_data.get("keystore_alias", "vietanhbui2000"),
-        keystore_password=gen_data.get("keystore_password", gen_data.get("keystore_pass", "1234567890")),
+        keystore_password=gen_data.get("keystore_password", "1234567890"),
         default_cli_source=gen_data.get("default_cli_source", "MorpheApp/morphe-cli"),
         default_cli_version=gen_data.get("default_cli_version", "latest"),
         default_patches_source=gen_data.get("default_patches_source", "MorpheApp/morphe-patches"),
@@ -82,7 +82,7 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
 
         curr_name = section_name
         curr_data = section_data
-        while isinstance(curr_data, dict) and "id" not in curr_data and "pkg" not in curr_data and len(curr_data) == 1:
+        while isinstance(curr_data, dict) and "id" not in curr_data and len(curr_data) == 1:
             nested_k, nested_v = next(iter(curr_data.items()))
             if isinstance(nested_v, dict):
                 curr_name = f"{curr_name}.{nested_k}"
@@ -94,8 +94,7 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
         section_data = curr_data
 
         enabled = section_data.get("enabled", True)
-        app_id = section_data.get("id") or section_data.get("pkg") or section_data.get("pkg_name", "")
-        app_name = section_data.get("app_name", section_name)
+        app_id = section_data.get("id", "")
         version = section_data.get("version", "auto")
         arch = _normalize_arch(section_data.get("arch", "universal"))
         dpi = section_data.get("dpi", "")
@@ -106,18 +105,18 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
         patches_version = section_data.get("patches_version", general.default_patches_version)
 
         # URLs & Sources
-        aurorastore = section_data.get("aurorastore", section_data.get("aurora", False))
-        aurorastore_url = section_data.get("aurorastore_url", section_data.get("aurora_url"))
+        aurorastore = section_data.get("aurorastore", False)
+        aurorastore_url = section_data.get("aurorastore_url")
         apkmirror_url = section_data.get("apkmirror_url")
         uptodown_url = section_data.get("uptodown_url")
         apkpure_url = section_data.get("apkpure_url")
         ia_url = section_data.get("ia_url")
         direct_url = section_data.get("direct_url")
 
-        exclusive_patches = section_data.get("exclusive_patches", section_data.get("exclusive-patches", False))
-        included_patches = _parse_patches_list(section_data.get("included_patches") or section_data.get("included-patches", []))
-        excluded_patches = _parse_patches_list(section_data.get("excluded_patches") or section_data.get("excluded-patches", []))
-        patcher_args = section_data.get("patcher_args", section_data.get("patcher-args", ""))
+        exclusive_patches = section_data.get("exclusive_patches", False)
+        included_patches = _parse_patches_list(section_data.get("included_patches", []))
+        excluded_patches = _parse_patches_list(section_data.get("excluded_patches", []))
+        patcher_args = section_data.get("patcher_args", "")
 
         options = section_data.get("options", {})
         if not isinstance(options, dict):
@@ -126,7 +125,6 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
         app_config = AppConfig(
             name=section_name,
             id=app_id,
-            app_name=app_name,
             enabled=bool(enabled),
             version=str(version),
             arch=arch,

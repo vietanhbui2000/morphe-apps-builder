@@ -13,7 +13,7 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 try:
     import requests
     HAS_REQUESTS = True
