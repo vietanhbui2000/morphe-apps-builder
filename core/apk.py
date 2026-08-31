@@ -21,8 +21,8 @@ APK_EDITOR_URL = "https://github.com/REAndroid/APKEditor/releases/download/V1.4.
 
 def ensure_keystore(
     keystore_path: Path,
-    alias: str = "vietanhbui2000",
-    password: str = "1234567890"
+    keystore_alias: str = "vietanhbui2000",
+    keystore_password: str = "1234567890"
 ) -> bool:
     """Ensure a valid keystore exists; generate a default one using keytool if missing."""
     if keystore_path.is_file() and keystore_path.stat().st_size > 0:
@@ -34,12 +34,12 @@ def ensure_keystore(
     cmd = [
         "keytool", "-genkey", "-v",
         "-keystore", str(keystore_path),
-        "-alias", alias,
+        "-alias", keystore_alias,
         "-keyalg", "RSA",
         "-keysize", "2048",
         "-validity", "10000",
-        "-storepass", password,
-        "-keypass", password,
+        "-storepass", keystore_password,
+        "-keypass", keystore_password,
         "-dname", "CN=Morphe, OU=Builder, O=Morphe, L=Unknown, ST=Unknown, C=US"
     ]
 
@@ -177,7 +177,7 @@ def sign_apk(
     apk_path: Path,
     keystore_path: Path,
     keystore_password: str,
-    key_alias: str,
+    keystore_alias: str,
     output_path: Optional[Path] = None
 ) -> bool:
     """Sign an APK using apksigner with automatic keystore type fallback."""
@@ -185,7 +185,7 @@ def sign_apk(
         log_error(f"apksigner.jar not found at {APK_SIGNER_JAR}", indent=2)
         return False
 
-    if not ensure_keystore(keystore_path, key_alias, keystore_password):
+    if not ensure_keystore(keystore_path, keystore_alias, keystore_password):
         log_error(f"Keystore file not available at {keystore_path}", indent=2)
         return False
 
@@ -199,7 +199,7 @@ def sign_apk(
             "--ks", str(keystore_path),
             "--ks-pass", f"pass:{keystore_password}",
             "--key-pass", f"pass:{keystore_password}",
-            "--ks-key-alias", key_alias,
+            "--ks-key-alias", keystore_alias,
         ]
         if ks_type:
             cmd.extend(["--ks-type", ks_type])
