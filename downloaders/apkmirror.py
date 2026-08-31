@@ -86,6 +86,7 @@ class APKMirrorDownloader(BaseDownloader):
         app_name_match = re.search(r"/apk/([^/]+)/([^/]+)", clean_url)
         app_slug = app_name_match.group(2) if app_name_match else ""
         ver_slug = version.replace(".", "-").replace(" ", "-")
+        ver_parts = ver_slug.split("-")
 
         # Strategy 1: Direct Slug
         if app_slug:
@@ -94,7 +95,41 @@ class APKMirrorDownloader(BaseDownloader):
             if html and "404 Whoops" not in html and "Page Not Found" not in html and ("downloadButton" in html or "table-row" in html):
                 return candidate_url
 
-        # Strategy 2: Category & Query Search
+        # Strategy 2: URL Pattern Substitution
+        page1_html = http_client.get_html(clean_url)
+        if page1_html and app_slug:
+            app_path = re.search(r'/apk/[^/]+/[^/]+', clean_url)
+            app_path_prefix = app_path.group(0) if app_path else ""
+            # Match only release index links belonging to this app's own path
+            pattern = re.escape(app_path_prefix) + r'/([^/"]*-release/)' if app_path_prefix else r'href="(/apk/[^/]+/[^/]+/[^/"]*-release/)"'
+            existing_links = re.findall(pattern, page1_html)
+            suffixes_tried: set = set()
+            for link in existing_links:
+                link_full = f"{BASE_URL}{link}" if link.startswith("/") else link
+                slug_m = re.search(r'/([^/]+)-release/$', link_full)
+                if not slug_m:
+                    continue
+                release_slug = slug_m.group(1)
+                # Strip the app_slug prefix to isolate the numeric portion
+                prefix = f"{app_slug}-"
+                if release_slug.startswith(prefix):
+                    numeric_part = release_slug[len(prefix):]
+                else:
+                    m = re.match(r'^[a-z-]*?(\d.*)$', release_slug)
+                    numeric_part = m.group(1) if m else release_slug
+                segments = numeric_part.split("-")
+                n = len(ver_parts)
+                # Only learn suffix from links whose version segment count >= our target
+                if len(segments) >= n and all(s.isdigit() for s in segments[:n]):
+                    suffix = ("-" + "-".join(segments[n:])) if len(segments) > n else ""
+                    if suffix not in suffixes_tried:
+                        suffixes_tried.add(suffix)
+                        mutated_url = f"{clean_url}/{app_slug}-{ver_slug}{suffix}-release/"
+                        html = http_client.get_html(mutated_url)
+                        if html and "404 Whoops" not in html and "Page Not Found" not in html and ("downloadButton" in html or "table-row" in html):
+                            return mutated_url
+
+        # Strategy 3: Category & Query Search
         if app_slug:
             search_urls = [
                 f"{BASE_URL}/uploads/?appcategory={app_slug}&q={version}",
@@ -106,33 +141,19 @@ class APKMirrorDownloader(BaseDownloader):
                 if found:
                     return found
 
-        # Strategy 3: Pagination Crawl (Pages 1 to 5)
-        page1_html: Optional[str] = None
-        for page_num in range(1, 6):
-            p_url = clean_url if page_num == 1 else f"{clean_url}/page/{page_num}/"
+        # Strategy 4: Pagination Crawl (Pages 1 to 10)
+        if page1_html:
+            found = self._extract_version_link(page1_html, version)
+            if found:
+                return found
+        for page_num in range(2, 11):
+            p_url = f"{clean_url}/page/{page_num}/"
             html_page = http_client.get_html(p_url)
             if not html_page:
                 break
-            if page_num == 1:
-                page1_html = html_page
-
             found = self._extract_version_link(html_page, version)
             if found:
                 return found
-
-        # Strategy 4: URL Pattern Substitution
-        # From discovered release links on page 1, pick an eligible release URL and substitute the version code
-        if page1_html:
-            existing_links = re.findall(r'href="(/apk/[^/]+/[^/]+/[^"]*-release/)"', page1_html)
-            for link in existing_links:
-                link_full = f"{BASE_URL}{link}" if link.startswith("/") else link
-                m = re.search(r'-(\d+(?:-\d+)+)(?:-\d+)?-release/', link_full)
-                if m:
-                    old_ver_slug = m.group(1)
-                    mutated_url = link_full.replace(f"-{old_ver_slug}-", f"-{ver_slug}-")
-                    html = http_client.get_html(mutated_url)
-                    if html and "404 Whoops" not in html and "Page Not Found" not in html and ("downloadButton" in html or "table-row" in html):
-                        return mutated_url
 
         return None
 
