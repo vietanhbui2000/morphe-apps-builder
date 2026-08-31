@@ -17,6 +17,8 @@ jobs:
     permissions:
       contents: write
       actions: write
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       should_build: ${{ steps.check_step.outputs.SHOULD_BUILD }}
     steps:
@@ -40,8 +42,6 @@ jobs:
 
       - name: Check for Updates
         id: check_step
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" == "push" ] || [ ! -f "release.md" ]; then
             echo "SHOULD_BUILD=1" >> "$GITHUB_OUTPUT"
@@ -56,8 +56,6 @@ jobs:
           fi
 
       - name: Clean Old Workflow Runs
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh run list -L 100 --json databaseId -q '.[].databaseId' | tail -n +15 | xargs -I ID gh api "repos/$GITHUB_REPOSITORY/actions/runs/ID" -X DELETE || true
 

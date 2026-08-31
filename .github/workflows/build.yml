@@ -12,6 +12,7 @@ jobs:
       contents: write
     env:
       TZ: Asia/Ho_Chi_Minh
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -46,9 +47,6 @@ jobs:
           done
 
       - name: Download Prebuilts & Stock APKs
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
         run: python build.py --download-only
 
       - name: Stop FlareSolverr Service
@@ -64,8 +62,6 @@ jobs:
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Prune Old Releases & Orphaned Tags
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Cleaning older releases (keeping 9 most recent)..."
           ALL_TAGS=$(gh release list --limit 100 --json tagName -q '.[].tagName')
@@ -89,6 +85,8 @@ jobs:
           done
 
       - name: Patch & Sign APKs
+        env:
+          RELEASE_TAG: ${{ steps.tag_gen.outputs.RELEASE_TAG }}
         run: python build.py --patch-only
 
       - name: Capture Release Notes
@@ -102,7 +100,6 @@ jobs:
 
       - name: Publish GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TITLE: "${{ steps.tag_gen.outputs.RELEASE_TAG }}"
           TAG: "${{ steps.tag_gen.outputs.RELEASE_TAG }}"
           NOTES: "${{ steps.release_notes.outputs.NOTES }}"
@@ -117,8 +114,6 @@ jobs:
           fi
 
       - name: Commit release.md to releaselog branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
