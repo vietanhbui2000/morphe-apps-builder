@@ -61,24 +61,39 @@ def check_updates(config_path: Path) -> int:
     log_stage("Checking for upstream updates")
     sources = set((a.cli_source, a.patches_source) for a in enabled_apps)
 
-    for cli_src, patches_src in sources:
-        log_info(f"Checking {cli_src}...")
-        cli_rel = github_client.get_release(cli_src, "latest")
-        if cli_rel:
-            log_success(f"Latest CLI: {cli_rel.get('tag_name')} ({cli_src})", indent=1)
+    release_md = ROOT_DIR / "release.md"
+    prev_release_text = release_md.read_text(encoding="utf-8") if release_md.is_file() else ""
+    should_build = not bool(prev_release_text)
 
-        log_info(f"Checking {patches_src}...")
-        patches_rel = github_client.get_release(patches_src, "latest")
+    for cli_source, patches_source in sources:
+        log_info(f"Checking {cli_source}...")
+        cli_rel = github_client.get_release(cli_source, "latest")
+        if cli_rel:
+            cli_tag = cli_rel.get("tag_name", "")
+            log_success(f"Latest CLI: {cli_tag} ({cli_source})", indent=1)
+            if cli_tag and cli_tag not in prev_release_text:
+                should_build = True
+
+        log_info(f"Checking {patches_source}...")
+        patches_rel = github_client.get_release(patches_source, "latest")
         if patches_rel:
-            log_success(f"Latest Patches: {patches_rel.get('tag_name')} ({patches_src})", indent=1)
+            patches_tag = patches_rel.get("tag_name", "")
+            log_success(f"Latest Patches: {patches_tag} ({patches_source})", indent=1)
+            if patches_tag and patches_tag not in prev_release_text:
+                should_build = True
+
+    if should_build:
+        print("SHOULD_BUILD=1")
+    else:
+        print("SHOULD_BUILD=0")
 
     return 0
 
 
 def resolve_app_version(
     app: AppConfig,
-    cli_jar: Path,
-    patch_file: Path,
+    cli_file: Path,
+    patches_file: Path,
     dry_run: bool = False
 ) -> Optional[str]:
     """Resolve target version for app (from config, patches compatibility list, or fallback)."""
@@ -90,8 +105,8 @@ def resolve_app_version(
         return "auto"
 
     # Try resolving from patch bundle compatibility list
-    if cli_jar.is_file() and patch_file.is_file():
-        resolved = morphe_patcher.get_compatible_version(cli_jar, patch_file, app.id)
+    if cli_file.is_file() and patches_file.is_file():
+        resolved = morphe_patcher.get_compatible_version(cli_file, patches_file, app.id)
         if resolved:
             log_success(f"Resolved compatible version from patch bundle: {resolved}", indent=1)
             return resolved
@@ -102,7 +117,7 @@ def resolve_app_version(
     for _, dl_inst, src_url in sources:
         vers = dl_inst.get_versions(src_url)
         if vers:
-            log_success(f"Fallback version resolved from {dl_inst.name}: {vers[0]}", indent=1)
+            log_success(f"Fallback version resolved from {dl_inst.display_name}: {vers[0]}", indent=1)
             return vers[0]
 
     return "auto" if dry_run else None
@@ -111,44 +126,45 @@ def resolve_app_version(
 def download_single_target(
     app: AppConfig,
     arch: str,
-    cli_jar: Path,
-    patch_file: Path,
+    cli_file: Path,
+    patches_file: Path,
     cli_tag: str,
-    patch_tag: str,
+    patches_tag: str,
     dry_run: bool = False
 ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Download phase for an architecture target or dynamic multi-architecture expansion ('all').
     Returns (list_of_target_info_dicts, error_message).
     """
-    print()
     log_stage(f"Downloading {app.app_name} ({arch})")
 
-    resolved_version = resolve_app_version(app, cli_jar, patch_file, dry_run=dry_run)
+    resolved_version = resolve_app_version(app, cli_file, patches_file, dry_run=dry_run)
     if not resolved_version:
         return [], "Could not resolve version for app"
 
     if dry_run:
         log_info(f"[DRY-RUN] Would download {app.app_name} v{resolved_version} ({arch})", indent=1)
-        base_dict = {
+        target_info = {
+            "name": app.name,
             "app": app.name,
+            "app_name": app.app_name,
             "id": app.id,
             "version": resolved_version,
             "cli_source": app.cli_source,
-            "cli_version": cli_tag,
-            "cli_file": str(cli_jar),
+            "cli_tag": cli_tag,
+            "cli_file": str(cli_file),
             "patches_source": app.patches_source,
-            "patches_version": patch_tag,
-            "patches_file": str(patch_file),
+            "patches_tag": patches_tag,
+            "patches_file": str(patches_file),
             "stock_apk": "",
         }
         if arch == "all":
             return [
-                {**base_dict, "arch": "universal"},
-                {**base_dict, "arch": "arm64-v8a"},
-                {**base_dict, "arch": "armeabi-v7a"},
+                {**target_info, "arch": "universal"},
+                {**target_info, "arch": "arm64-v8a"},
+                {**target_info, "arch": "armeabi-v7a"},
             ], None
-        return [{**base_dict, "arch": arch}], None
+        return [{**target_info, "arch": arch}], None
 
     sources = get_download_sources_for_app(app)
     if not sources:
@@ -167,7 +183,8 @@ def download_single_target(
                 version=resolved_version,
                 arch=download_arch_query,
                 dpi=app.dpi,
-                output_path=stock_apk_base
+                output_path=stock_apk_base,
+                app_id=app.id
             )
             if downloaded_file and downloaded_file.is_file() and downloaded_file.stat().st_size > 0:
                 log_success(f"Downloaded {downloaded_file.name} via {provider_name}", indent=1)
@@ -180,31 +197,33 @@ def download_single_target(
     if not downloaded_file or not downloaded_file.is_file():
         return [], "All download providers failed"
 
-    base_info = {
+    target_info = {
+        "name": app.name,
         "app": app.name,
+        "app_name": app.app_name,
         "id": app.id,
         "version": resolved_version,
         "stock_apk": str(downloaded_file),
         "cli_source": app.cli_source,
-        "cli_version": cli_tag,
-        "cli_file": str(cli_jar),
+        "cli_tag": cli_tag,
+        "cli_file": str(cli_file),
         "patches_source": app.patches_source,
-        "patches_version": patch_tag,
-        "patches_file": str(patch_file),
+        "patches_tag": patches_tag,
+        "patches_file": str(patches_file),
     }
 
     if arch == "all":
         # Inspect native ABIs inside the downloaded APK / bundle
         detected_abis = get_apk_architectures(downloaded_file)
         if detected_abis:
-            targets = [{**base_info, "arch": "universal"}]
+            targets = [{**target_info, "arch": "universal"}]
             for abi in detected_abis:
-                targets.append({**base_info, "arch": abi})
+                targets.append({**target_info, "arch": abi})
             log_success(f"Detected architectures: universal, {', '.join(detected_abis)}", indent=1)
             return targets, None
-        return [{**base_info, "arch": "universal"}], None
+        return [{**target_info, "arch": "universal"}], None
 
-    return [{**base_info, "arch": arch}], None
+    return [{**target_info, "arch": arch}], None
 
 
 def patch_single_target(
@@ -216,16 +235,16 @@ def patch_single_target(
     """
     Patch and sign phase for a pre-downloaded target.
     """
-    app_name = target_info.get("app", target_info.get("app_name", app.name))
+    app_name = target_info.get("app", target_info.get("name", target_info.get("app_name", app.name)))
     arch = target_info["arch"]
     version = target_info["version"]
-    cli_jar = Path(target_info.get("cli_file", target_info.get("cli_jar", "")))
-    patch_file = Path(target_info.get("patches_file", target_info.get("patch_file", "")))
+    cli_file = Path(target_info.get("cli_file", ""))
+    patches_file = Path(target_info.get("patches_file", ""))
 
     cli_source = target_info.get("cli_source", app.cli_source)
-    cli_tag = target_info.get("cli_version", target_info.get("cli_tag", ""))
+    cli_tag = target_info.get("cli_tag", target_info.get("cli_version", ""))
     patches_source = target_info.get("patches_source", app.patches_source)
-    patches_tag = target_info.get("patches_version", target_info.get("patches_tag", target_info.get("patch_tag", "")))
+    patches_tag = target_info.get("patches_tag", target_info.get("patches_version", ""))
 
     log_stage(f"Patching {app_name} ({arch}) v{version}")
 
@@ -293,8 +312,8 @@ def patch_single_target(
 
     log_info(f"Applying patches for {app_name}...", indent=1)
     patch_success = morphe_patcher.patch(
-        cli_jar=cli_jar,
-        patch_files=[patch_file],
+        cli_file=cli_file,
+        patches_files=[patches_file],
         stock_apk=stock_apk,
         output_apk=temp_patched,
         app_config=app,
@@ -386,7 +405,7 @@ def _get_github_repo() -> str:
 
 def write_build_summary(results: List[BuildResult]) -> int:
     """Generate console summary and build.md."""
-    print("\n" + "=" * 70)
+    print("=" * 70)
     print(f"{Colors.BOLD}BUILD SUMMARY{Colors.RESET}")
     print("=" * 70)
 
@@ -512,12 +531,11 @@ def main() -> int:
     # PHASE 1: DOWNLOAD PHASE
     # --------------------------------------------------------------------------
     targets_to_patch: List[Dict[str, Any]] = []
+    failed_downloads: List[BuildResult] = []
 
     if not args.patch_only:
-        print()
         log_stage("Starting Download Phase (Prebuilts & Stock APKs)")
         download_targets: List[Dict[str, Any]] = []
-        failed_downloads: List[BuildResult] = []
 
         total_download_tasks = len(enabled_apps) + 1
 
@@ -529,7 +547,7 @@ def main() -> int:
         if not args.dry_run:
             ensure_apk_editor()
         else:
-            log_info("[DRY-RUN] Would download APKEditor.jar...", indent=2)
+            log_info("[DRY-RUN] Would download APKEditor.jar...", indent=1)
 
         prebuilts_cache: Dict[Tuple[str, str, str, str], Tuple[Optional[Path], Optional[Path], str, str]] = {}
         unique_prebuilts = list(dict.fromkeys(
@@ -537,23 +555,23 @@ def main() -> int:
             for app in enabled_apps
         ))
 
-        for cli_repo, cli_ver, patches_repo, patches_ver in unique_prebuilts:
-            cli_jar, patch_file, cli_tag, patch_tag = github_client.get_prebuilts(
-                cli_repo=cli_repo,
-                cli_tag=cli_ver,
-                patches_repo=patches_repo,
-                patches_tag=patches_ver,
+        for cli_source, cli_version, patches_source, patches_version in unique_prebuilts:
+            cli_file, patches_file, cli_tag, patches_tag = github_client.get_prebuilts(
+                cli_source=cli_source,
+                cli_version=cli_version,
+                patches_source=patches_source,
+                patches_version=patches_version,
                 cli_dir=CLI_DIR,
                 patches_dir=PATCHES_DIR
             )
-            if not cli_jar or not patch_file:
+            if not cli_file or not patches_file:
                 if args.dry_run:
-                    cli_jar = CLI_DIR / "morphe-cli-mock.jar"
-                    patch_file = PATCHES_DIR / "morphe-patches-mock.mpp"
+                    cli_file = CLI_DIR / "morphe-cli-mock.jar"
+                    patches_file = PATCHES_DIR / "morphe-patches-mock.mpp"
                     cli_tag = "mock"
-                    patch_tag = "mock"
-            prebuilts_cache[(cli_repo, cli_ver, patches_repo, patches_ver)] = (
-                cli_jar, patch_file, cli_tag, patch_tag
+                    patches_tag = "mock"
+            prebuilts_cache[(cli_source, cli_version, patches_source, patches_version)] = (
+                cli_file, patches_file, cli_tag, patches_tag
             )
         group_end()
 
@@ -563,16 +581,16 @@ def main() -> int:
             group_start(f"Download [{task_idx}/{total_download_tasks}]: {app.name}")
             log_app_banner(app_idx, len(enabled_apps), app.app_name, app.id)
 
-            cli_jar, patch_file, cli_tag, patch_tag = prebuilts_cache.get(
+            cli_file, patches_file, cli_tag, patches_tag = prebuilts_cache.get(
                 (app.cli_source, app.cli_version, app.patches_source, app.patches_version),
                 (None, None, "", "")
             )
 
-            if not cli_jar or not patch_file:
+            if not cli_file or not patches_file:
                 group_end()
                 for arch in app.arch:
                     failed_downloads.append(BuildResult(
-                        app_name=app.app_name,
+                        app_name=app.name,
                         id=app.id,
                         version="unknown",
                         arch=arch,
@@ -585,17 +603,17 @@ def main() -> int:
                 targets_list, err = download_single_target(
                     app=app,
                     arch=arch,
-                    cli_jar=cli_jar,
-                    patch_file=patch_file,
+                    cli_file=cli_file,
+                    patches_file=patches_file,
                     cli_tag=cli_tag,
-                    patch_tag=patch_tag,
+                    patches_tag=patches_tag,
                     dry_run=args.dry_run
                 )
                 if targets_list:
                     download_targets.extend(targets_list)
                 else:
                     failed_downloads.append(BuildResult(
-                        app_name=app.app_name,
+                        app_name=app.name,
                         id=app.id,
                         version="unknown",
                         arch=arch,
@@ -624,12 +642,11 @@ def main() -> int:
             log_error("No downloaded targets found in manifest. Run with --download-only first or without flags.")
             return 1
 
-    print()
     log_stage("Starting Patching & Signing Phase")
     results: List[BuildResult] = []
 
     for index, t in enumerate(targets_to_patch, 1):
-        app = apps_map.get(t.get("app", t.get("app_name")))
+        app = apps_map.get(t.get("name", t.get("app", t.get("app_name"))))
         if not app:
             continue
 
@@ -643,7 +660,8 @@ def main() -> int:
         results.append(res)
         group_end()
 
-    return write_build_summary(results)
+    all_results = failed_downloads + results if not args.patch_only else results
+    return write_build_summary(all_results)
 
 
 if __name__ == "__main__":
