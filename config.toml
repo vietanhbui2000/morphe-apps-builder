@@ -1,9 +1,9 @@
 [general]
-default_cli_source = "MorpheApp/morphe-cli"
-default_patches_source = "MorpheApp/morphe-patches"
 keystore = "keystore.keystore"
 keystore_alias = "vietanhbui2000"
 keystore_password = "1234567890"
+default_cli_source = "MorpheApp/morphe-cli"
+default_patches_source = "MorpheApp/morphe-patches"
 
 [YouTube]
 enabled = true

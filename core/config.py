@@ -64,8 +64,8 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
         keystore_alias=gen_data.get("keystore_alias", "vietanhbui2000"),
         keystore_password=gen_data.get("keystore_password", gen_data.get("keystore_pass", "1234567890")),
         default_cli_source=gen_data.get("default_cli_source", "MorpheApp/morphe-cli"),
-        default_patches_source=gen_data.get("default_patches_source", "MorpheApp/morphe-patches"),
         default_cli_version=gen_data.get("default_cli_version", "latest"),
+        default_patches_source=gen_data.get("default_patches_source", "MorpheApp/morphe-patches"),
         default_patches_version=gen_data.get("default_patches_version", "latest"),
     )
 
@@ -95,22 +95,22 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
         dpi = section_data.get("dpi", "")
 
         cli_source = section_data.get("cli_source", general.default_cli_source)
-        patches_source = section_data.get("patches_source", general.default_patches_source)
         cli_version = section_data.get("cli_version", general.default_cli_version)
+        patches_source = section_data.get("patches_source", general.default_patches_source)
         patches_version = section_data.get("patches_version", general.default_patches_version)
 
         # URLs & Sources
+        aurorastore = section_data.get("aurorastore", section_data.get("aurora", False))
+        aurorastore_url = section_data.get("aurorastore_url", section_data.get("aurora_url"))
         apkmirror_url = section_data.get("apkmirror_url")
         uptodown_url = section_data.get("uptodown_url")
         apkpure_url = section_data.get("apkpure_url")
         ia_url = section_data.get("ia_url")
         direct_url = section_data.get("direct_url")
-        aurorastore = section_data.get("aurorastore", section_data.get("aurora", False))
-        aurorastore_url = section_data.get("aurorastore_url", section_data.get("aurora_url"))
 
+        exclusive_patches = section_data.get("exclusive_patches", section_data.get("exclusive-patches", False))
         included_patches = _parse_patches_list(section_data.get("included_patches") or section_data.get("included-patches", []))
         excluded_patches = _parse_patches_list(section_data.get("excluded_patches") or section_data.get("excluded-patches", []))
-        exclusive_patches = section_data.get("exclusive_patches", section_data.get("exclusive-patches", False))
         patcher_args = section_data.get("patcher_args", section_data.get("patcher-args", ""))
 
         options = section_data.get("options", {})
@@ -126,19 +126,19 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
             arch=arch,
             dpi=str(dpi),
             cli_source=cli_source,
-            patches_source=patches_source,
             cli_version=cli_version,
+            patches_source=patches_source,
             patches_version=patches_version,
+            aurorastore=bool(aurorastore),
+            aurorastore_url=aurorastore_url,
             apkmirror_url=apkmirror_url,
             uptodown_url=uptodown_url,
             apkpure_url=apkpure_url,
             ia_url=ia_url,
             direct_url=direct_url,
-            aurorastore=bool(aurorastore),
-            aurorastore_url=aurorastore_url,
+            exclusive_patches=bool(exclusive_patches),
             included_patches=included_patches,
             excluded_patches=excluded_patches,
-            exclusive_patches=bool(exclusive_patches),
             patcher_args=str(patcher_args),
             options=options,
         )

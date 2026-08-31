@@ -29,19 +29,23 @@ The `[general]` table defines fallback defaults for all apps:
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `default_cli_source` | `string` | `"MorpheApp/morphe-cli"` | Default GitHub repository for Morphe CLI. |
-| `default_patches_source` | `string` | `"MorpheApp/morphe-patches"` | Default GitHub repository for `.mpp` patch bundles. |
 | `keystore` | `string` | `"keystore.keystore"` | Path to the keystore file used for signing release APKs. |
 | `keystore_alias` | `string` | `"vietanhbui2000"` | Keystore entry alias. |
 | `keystore_password` | `string` | `"1234567890"` | Keystore and key password. |
+| `default_cli_source` | `string` | `"MorpheApp/morphe-cli"` | Default GitHub repository for Morphe CLI. |
+| `default_cli_version` | `string` | `"latest"` | Default Morphe CLI release tag. |
+| `default_patches_source` | `string` | `"MorpheApp/morphe-patches"` | Default GitHub repository for `.mpp` patch bundles. |
+| `default_patches_version` | `string` | `"latest"` | Default patches release tag. |
 
 ```toml
 [general]
-default_cli_source = "MorpheApp/morphe-cli"
-default_patches_source = "MorpheApp/morphe-patches"
 keystore = "keystore.keystore"
 keystore_alias = "vietanhbui2000"
 keystore_password = "1234567890"
+default_cli_source = "MorpheApp/morphe-cli"
+default_cli_version = "latest"
+default_patches_source = "MorpheApp/morphe-patches"
+default_patches_version = "latest"
 ```
 
 ---
@@ -65,8 +69,8 @@ The section header (`[YouTube]`, `[YouTube-Music]`, etc.) directly defines the a
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `cli_source` | `string` | `general.default_cli_source` | Override CLI GitHub repository for this specific app. |
-| `patches_source` | `string` | `general.default_patches_source` | Override patches GitHub repository for this specific app. |
 | `cli_version` | `string` | `"latest"` | CLI release tag (`"latest"`, `"prerelease"`, or specific tag e.g. `"v1.14.0"`). |
+| `patches_source` | `string` | `general.default_patches_source` | Override patches GitHub repository for this specific app. |
 | `patches_version` | `string` | `"latest"` | Patch release tag (`"latest"`, `"prerelease"`, or specific tag e.g. `"v1.40.0"`). |
 
 ### Download Sources (Fallback Chain)
@@ -87,9 +91,9 @@ The builder attempts downloaders in priority order based on which URLs are provi
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `exclusive_patches` | `boolean` | `false` | If `true`, disables all default patches and only applies patches listed in `included_patches`. |
 | `included_patches` | `list[string]` | `[]` | List of non-default patches to explicitly enable. |
 | `excluded_patches` | `list[string]` | `[]` | List of default patches to explicitly disable. |
-| `exclusive_patches` | `boolean` | `false` | If `true`, disables all default patches and only applies patches listed in `included_patches`. |
 | `patcher_args` | `string` | `""` | Arbitrary additional flags passed directly to Morphe CLI. |
 
 ---
@@ -121,24 +125,25 @@ speedList = "0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0"
 
 ```toml
 [general]
-default_cli_source = "MorpheApp/morphe-cli"
-default_patches_source = "MorpheApp/morphe-patches"
 keystore = "keystore.keystore"
 keystore_alias = "vietanhbui2000"
 keystore_password = "1234567890"
+default_cli_source = "MorpheApp/morphe-cli"
+default_cli_version = "latest"
+default_patches_source = "MorpheApp/morphe-patches"
+default_patches_version = "latest"
 
 [YouTube]
 enabled = true
 id = "com.google.android.youtube"
 version = "auto"
 arch = ["all"]
-aurorastore = true
 apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
 uptodown_url = "https://youtube.en.uptodown.com/android"
 ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.youtube"
 cli_source = "MorpheApp/morphe-cli"
-patches_source = "MorpheApp/morphe-patches"
 cli_version = "latest"
+patches_source = "MorpheApp/morphe-patches"
 patches_version = "latest"
 exclusive_patches = false
 included_patches = [

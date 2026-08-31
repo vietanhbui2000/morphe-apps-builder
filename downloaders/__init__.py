@@ -6,20 +6,20 @@ Registry and dispatcher for modular downloaders.
 from typing import List, Tuple
 from core.models import AppConfig
 from downloaders.base import BaseDownloader
+from downloaders.aurorastore import AuroraStoreDownloader
 from downloaders.apkmirror import APKMirrorDownloader
 from downloaders.uptodown import UptodownDownloader
 from downloaders.apkpure import APKPureDownloader
 from downloaders.ia import IADownloader
 from downloaders.direct import DirectDownloader
-from downloaders.aurorastore import AuroraStoreDownloader
 
 DOWNLOADERS = {
+    "aurorastore": AuroraStoreDownloader(),
     "apkmirror": APKMirrorDownloader(),
     "uptodown": UptodownDownloader(),
     "apkpure": APKPureDownloader(),
     "ia": IADownloader(),
     "direct": DirectDownloader(),
-    "aurorastore": AuroraStoreDownloader(),
 }
 
 def get_download_sources_for_app(app: AppConfig) -> List[Tuple[str, BaseDownloader, str]]:
