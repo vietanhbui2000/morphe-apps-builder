@@ -12,6 +12,7 @@ import random
 import sys
 import tempfile
 import time
+import urllib.request
 import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -48,6 +49,13 @@ URL_DETAILS = f"{URL_FDFE}/details"
 URL_PURCHASE = f"{URL_FDFE}/purchase"
 URL_DELIVERY = f"{URL_FDFE}/delivery"
 URL_ACQUIRE = f"{URL_FDFE}/acquire"
+
+X_DFE_ENCODED_TARGETS = (
+    "CAESN/qigQYC2AMBFfUbyA7SM5Ij/CvfBoIDgxHqGP8R3xzIBvoQtBKFDZ4HAY4FrwSVMasHBOO2Q8akgYRAQECAQO7AQEpKZ0CnwECAwRrAQYBr9PPAoK7sQMBAQMCBAkIDAgBAwEDBAICBAUZEgMEBAMLAQEBBQEBAcYBARYED+cBfS8CHQEKkAEMMxcBIQoUDwYHIjd3DQ4MFk0JWGYZEREYAQOLAYEBFDMIEYMBAgICAgICOxkCD18LGQKEAcgDBIQBAgGLARkYCy8oBTJlBCUocxQn0QUBDkkGxgNZQq0BZSbeAmIDgAEBOgGtAaMCDAOQAZ4BBIEBKUtQUYYBQscDDxPSARA1oAEHAWmnAsMB2wFyywGLAxol+wImlwOOA80CtwN26A0WjwJVbQEJPAH+BRDeAfkHK/ABASEBCSAaHQemAzkaRiu2Ad8BdXeiAwEBGBUBBN4LEIABK4gB2AFLfwECAdoENq0CkQGMBsIBiQEtiwGgA1zyAUQ4uwS8AwhsvgPyAcEDF27vApsBHaICGhl3GSKxAR8MC6cBAgItmQYG9QIeywLvAeYBDArLAh8HASI4ELICDVmVBgsY/gHWARtcAsMBpALiAdsBA7QBpAJmIArpByn0AyAKBwHTARIHAX8D+AMBcRIBBbEDmwUBMacCHAciNp0BAQF0OgQLJDuSAh54kwFSP0eeAQQ4M5EBQgMEmwFXywFo0gFyWwMcapQBBugBPUW2AVgBKmy3AR6PAbMBGQxrUJECvQR+8gFoWDsYgQNwRSczBRXQAgtRswEW0ALMAREYAUEBIG6yATYCRE8OxgER8gMBvQEDRkwLc8MBTwHZAUOnAXiiBakDIbYBNNcCIUmuArIBSakBrgFHKs0EgwV/G3AD0wE6LgECtQJ4xQFwFbUCjQPkBS6vAQqEAUZF3QIM9wEhCoYCQhXsBCyZArQDugIziALWAdIBlQHwBdUErQE6qQaSA4EEIvYBHir9AQVLmgMCApsCKAwHuwgrENsBAjNYswEVmgIt7QJnN4wDEnta+wGfAcUBxgEtEFXQAQWdAUAeBcwBAQM7rAEJATJ0LENrdh73A6UBhAE+qwEeASxLZUMhDREuH0CGARbd7K0GlQo"
+)
+X_DFE_PHENOTYPE = (
+    "H4sIAAAAAAAAB3OO3KjMAAA0KRNuWXukBkBQkAJ2MhgAZb5u2GCwQZbCH_EJ77QHmgvtDtbv-Z9_H63zXXU0NVPB1odlyGy7751Q3CitlPDvFd8lxhz3tpNmz7P92CFw73zdHU2Ie0Ad2kmR8lxhiErTFLt3RPGfJQHSDy7Clw0bg8kqf2owLokN4SecJTLoSwBnzQSd652_MOf2d1vKBNVedzg4ciPoLz2mQ8efGAgYeLou-l-PXn_7Sa1MfhHuySxt-4esulEDp8Sbq54CPPKjpANW-lkU2IZ0F92LBI-ukCKSptqeq1eXU96LD9nZfhKHdtjSwJqUm_2r6pMHOxk01saVanmNopjX3YxQafC4iC6T55aRbC8nTI98AF_kItIQAJb5EQxnKTO7TZDWnr01HVPxelb9A2OWX6poidMWl16K54kcu_jhXw-JSBQkVcD_fPsLSZu6joIBAAA"
+)
 
 DEVICE_PROPERTIES = {
     "UserReadableName": "Google Pixel 9a",
@@ -224,6 +232,68 @@ def _build_acquire_request(package_name: str, version_code: int, offer_type: int
     return request
 
 
+def _get_default_headers(
+    auth_token: str,
+    gsf_id: str,
+    consistency_token: Optional[str] = None,
+    config_token: Optional[str] = None
+) -> Dict[str, str]:
+    ua = (
+        f"Android-Finsky/{DEVICE_PROPERTIES['Vending.versionString']} "
+        f"(api=3,versionCode={DEVICE_PROPERTIES['Vending.version']},"
+        f"sdk={DEVICE_PROPERTIES['Build.VERSION.SDK_INT']},"
+        f"device={DEVICE_PROPERTIES['Build.DEVICE']},"
+        f"hardware={DEVICE_PROPERTIES['Build.HARDWARE']},"
+        f"product={DEVICE_PROPERTIES['Build.PRODUCT']},"
+        f"platformVersionRelease={DEVICE_PROPERTIES['Build.VERSION.RELEASE']},"
+        f"model={DEVICE_PROPERTIES['Build.MODEL']},"
+        f"buildId={DEVICE_PROPERTIES['Build.ID']},"
+        f"isWideScreen=0,supportedAbis={DEVICE_PROPERTIES['Platforms']})"
+    )
+    headers = {
+        "Authorization": f"Bearer {auth_token}",
+        "User-Agent": ua,
+        "X-DFE-Device-Id": gsf_id,
+        "Accept-Language": "en-US",
+        "X-DFE-Encoded-Targets": X_DFE_ENCODED_TARGETS,
+        "X-DFE-Phenotype": X_DFE_PHENOTYPE,
+        "X-DFE-Client-Id": "am-android-google",
+        "X-DFE-Network-Type": "4",
+        "X-DFE-Content-Filters": "",
+        "X-Limit-Ad-Tracking-Enabled": "false",
+        "X-Ad-Id": "",
+        "X-DFE-UserLanguages": "en_US",
+        "X-DFE-Request-Params": "timeoutMs=4000",
+    }
+    if consistency_token:
+        headers["X-DFE-Device-Checkin-Consistency-Token"] = consistency_token
+    if config_token:
+        headers["X-DFE-Device-Config-Token"] = config_token
+    return headers
+
+
+def _get_token_params(email: str, gsf_id: str, aas_token: str) -> Dict[str, str]:
+    return {
+        "androidId": gsf_id,
+        "sdk_version": DEVICE_PROPERTIES["Build.VERSION.SDK_INT"],
+        "Email": email,
+        "google_play_services_version": "251333035",
+        "device_country": "us",
+        "lang": "en",
+        "callerSig": "38918a453d07199354f8b19af05ec6562ced5788",
+        "app": "com.android.vending",
+        "client_sig": "38918a453d07199354f8b19af05ec6562ced5788",
+        "callerPkg": "com.google.android.gms",
+        "Token": aas_token,
+        "oauth2_foreground": "1",
+        "token_request_options": "CAA4AVAB",
+        "check_email": "1",
+        "system_partition": "1",
+        "droidguard_results": "null",
+        "service": "oauth2:https://www.googleapis.com/auth/googleplay",
+    }
+
+
 class AuroraStoreDownloader(BaseDownloader):
     @property
     def name(self) -> str:
@@ -244,6 +314,59 @@ class AuroraStoreDownloader(BaseDownloader):
         session.headers.update({"User-Agent": "com.aurora.store-4.8.3-75"})
         return session
 
+    def _get_flaresolverr_cookies(self, url: str) -> Tuple[Dict[str, str], str]:
+        fs_url = os.environ.get("FLARESOLVERR_URL", "http://localhost:8191/v1")
+        for target in (url, "https://auroraoss.com/"):
+            try:
+                payload = json.dumps({
+                    "cmd": "request.get",
+                    "url": target,
+                    "maxTimeout": 60000,
+                    "returnOnlyCookies": True
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    fs_url,
+                    data=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=70) as resp:
+                    if resp.status == 200:
+                        data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                        if data.get("status") == "ok":
+                            solution = data.get("solution", {})
+                            cookies = {c["name"]: c["value"] for c in solution.get("cookies", []) if "name" in c and "value" in c}
+                            ua = solution.get("userAgent", "")
+                            if cookies:
+                                return cookies, ua
+            except Exception:
+                pass
+        return {}, ""
+
+    def _post_dispenser(self, session: Any, dispenser_url: str) -> Optional[dict]:
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": "https://auroraoss.com",
+            "Referer": "https://auroraoss.com/",
+        }
+        try:
+            resp = session.post(dispenser_url, json=DEVICE_PROPERTIES, headers=headers, timeout=30)
+            if resp.status_code == 403:
+                log_info("[AuroraStore] Dispenser returned 403, resolving Cloudflare with FlareSolverr...", indent=2)
+                cookies, fs_ua = self._get_flaresolverr_cookies(dispenser_url)
+                if cookies:
+                    for k, v in cookies.items():
+                        session.cookies.set(k, v)
+                    if fs_ua:
+                        headers["User-Agent"] = fs_ua
+                    resp = session.post(dispenser_url, json=DEVICE_PROPERTIES, headers=headers, timeout=30)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            log_warn(f"[AuroraStore] Dispenser auth failed: {e}", indent=2)
+            return None
+
     def download(
         self,
         url: str,
@@ -262,7 +385,6 @@ class AuroraStoreDownloader(BaseDownloader):
             log_warn(f"[AuroraStore] Required libraries missing: {', '.join(missing)}. Install with `pip install {' '.join(missing)}`", indent=2)
             return None
 
-        # url can be the dispenser URL or package name
         dispenser_url = url if url.startswith("http") else DEFAULT_DISPENSER_URL
         package_name = app_id or (output_path.stem.split("_")[0] if "_" in output_path.stem else output_path.stem)
 
@@ -271,24 +393,14 @@ class AuroraStoreDownloader(BaseDownloader):
 
         try:
             # 1. Dispenser credentials
-            headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/plain, */*",
-                "Origin": "https://auroraoss.com",
-                "Referer": "https://auroraoss.com/",
-            }
-            try:
-                resp = session.post(dispenser_url, json=DEVICE_PROPERTIES, headers=headers, timeout=30)
-                resp.raise_for_status()
-                disp_data = resp.json()
-            except Exception as e:
-                log_warn(f"[AuroraStore] Dispenser auth failed: {e}", indent=2)
+            disp_data = self._post_dispenser(session, dispenser_url)
+            if not disp_data:
                 return None
 
             email = disp_data.get("email")
-            auth_token = disp_data.get("authToken") or disp_data.get("auth")
-            if not email or not auth_token:
-                log_warn(f"[AuroraStore] Dispenser returned invalid data", indent=2)
+            aas_token = disp_data.get("authToken") or disp_data.get("auth")
+            if not email or not aas_token:
+                log_warn("[AuroraStore] Dispenser returned invalid data", indent=2)
                 return None
 
             # 2. Checkin
@@ -306,31 +418,53 @@ class AuroraStoreDownloader(BaseDownloader):
             gsf_id = format(checkin_resp.androidId, "x")
             consistency_token = checkin_resp.deviceCheckinConsistencyToken
 
-            # 3. Headers
-            ua = (
-                f"Android-Finsky/{DEVICE_PROPERTIES['Vending.versionString']} "
-                f"(api=3,versionCode={DEVICE_PROPERTIES['Vending.version']},"
-                f"sdk={DEVICE_PROPERTIES['Build.VERSION.SDK_INT']},"
-                f"device={DEVICE_PROPERTIES['Build.DEVICE']},"
-                f"hardware={DEVICE_PROPERTIES['Build.HARDWARE']},"
-                f"product={DEVICE_PROPERTIES['Build.PRODUCT']},"
-                f"platformVersionRelease={DEVICE_PROPERTIES['Build.VERSION.RELEASE']},"
-                f"model={DEVICE_PROPERTIES['Build.MODEL']},"
-                f"buildId={DEVICE_PROPERTIES['Build.ID']},"
-                f"isWideScreen=0,supportedAbis={DEVICE_PROPERTIES['Platforms']})"
-            )
-            default_headers = {
-                "Authorization": f"Bearer {auth_token}",
-                "User-Agent": ua,
-                "X-DFE-Device-Id": gsf_id,
-                "Accept-Language": "en-US",
-                "X-DFE-Client-Id": "am-android-google",
-                "X-DFE-Network-Type": "4",
-            }
-            if consistency_token:
-                default_headers["X-DFE-Device-Checkin-Consistency-Token"] = consistency_token
+            # 3. Upload Device Config
+            device_config_token = None
+            try:
+                cfg_bytes = _build_upload_device_config_request()
+                cfg_headers = _get_default_headers(auth_token=aas_token, gsf_id=gsf_id, consistency_token=consistency_token)
+                cfg_headers["Content-Type"] = "application/x-protobuffer"
+                cfg_resp = session.post(URL_UPLOAD_DEVICE_CONFIG, data=cfg_bytes, headers=cfg_headers, timeout=30)
+                if cfg_resp.status_code == 200:
+                    cfg_wrapper = ResponseWrapper()
+                    cfg_wrapper.ParseFromString(cfg_resp.content)
+                    if cfg_wrapper.HasField("payload") and cfg_wrapper.payload.HasField("uploadDeviceConfigResponse"):
+                        device_config_token = cfg_wrapper.payload.uploadDeviceConfigResponse.uploadDeviceConfigToken
+            except Exception:
+                pass
 
-            # 4. Details
+            # 4. Generate Google Play OAuth Token
+            auth_headers = {
+                "app": "com.google.android.gms",
+                "User-Agent": f"GoogleAuth/1.4 ({DEVICE_PROPERTIES['Build.DEVICE']} {DEVICE_PROPERTIES['Build.ID']})",
+                "device": gsf_id,
+            }
+            token_params = _get_token_params(email=email, gsf_id=gsf_id, aas_token=aas_token)
+            auth_resp = session.post(URL_AUTH, data=token_params, headers=auth_headers, timeout=30)
+            auth_resp.raise_for_status()
+
+            play_auth_token = None
+            for line in auth_resp.text.splitlines():
+                if line.startswith("Auth="):
+                    play_auth_token = line[5:].strip()
+                    break
+            if not play_auth_token:
+                for part in auth_resp.text.split("&"):
+                    if part.startswith("Auth="):
+                        play_auth_token = part[5:].strip()
+                        break
+            if not play_auth_token:
+                play_auth_token = aas_token
+
+            # 5. Default headers for Google Play Store FDFE API
+            default_headers = _get_default_headers(
+                auth_token=play_auth_token,
+                gsf_id=gsf_id,
+                consistency_token=consistency_token,
+                config_token=device_config_token
+            )
+
+            # 6. App Details
             details_resp = session.get(URL_DETAILS, params={"doc": package_name}, headers=default_headers, timeout=30)
             details_resp.raise_for_status()
             wrapper = ResponseWrapper()
@@ -339,14 +473,19 @@ class AuroraStoreDownloader(BaseDownloader):
                 log_warn(f"[AuroraStore] No detailsResponse for {package_name}", indent=2)
                 return None
 
-            item = wrapper.payload.detailsResponse.item
+            details = wrapper.payload.detailsResponse
+            if not details.HasField("item"):
+                log_warn(f"[AuroraStore] No item in detailsResponse for {package_name}", indent=2)
+                return None
+
+            item = details.item
             version_code = item.details.appDetails.versionCode if (item.HasField("details") and item.details.HasField("appDetails")) else 0
             offer_type = item.offer[0].offerType if len(item.offer) > 0 else 1
             if version_code == 0:
                 log_warn(f"[AuroraStore] Could not resolve versionCode for {package_name}", indent=2)
                 return None
 
-            # 5. Acquire & Purchase
+            # 7. Acquire & Purchase
             try:
                 acquire_bytes = _build_acquire_request(package_name, version_code, offer_type)
                 acq_headers = dict(default_headers)
@@ -369,7 +508,7 @@ class AuroraStoreDownloader(BaseDownloader):
                 log_warn("[AuroraStore] Failed to obtain delivery token", indent=2)
                 return None
 
-            # 6. Delivery
+            # 8. Delivery
             deliv_resp = session.get(
                 URL_DELIVERY,
                 params={"ot": str(offer_type), "doc": package_name, "vc": str(version_code), "dtok": delivery_token},
@@ -392,7 +531,7 @@ class AuroraStoreDownloader(BaseDownloader):
             download_url = app_data.downloadUrl
             splits = [{"name": s.name, "url": s.downloadUrl} for s in app_data.splitDeliveryData]
 
-            # Download payload
+            # 9. Download payload
             if splits:
                 log_info(f"[AuroraStore] Split APK detected ({len(splits)} splits). Downloading bundle...", indent=2)
                 dest_bundle = output_path.parent / f"{output_path.name}.apkm"
