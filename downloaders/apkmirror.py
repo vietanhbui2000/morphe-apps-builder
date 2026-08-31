@@ -15,7 +15,7 @@ except ImportError:
     HAS_BS4 = False
 
 from core.http import http_client
-from core.logger import log_info, log_warn, log_error
+from core.logger import log_info, log_warn
 from downloaders.base import BaseDownloader
 
 BASE_URL = "https://www.apkmirror.com"
@@ -24,6 +24,10 @@ class APKMirrorDownloader(BaseDownloader):
     @property
     def name(self) -> str:
         return "apkmirror"
+
+    @property
+    def display_name(self) -> str:
+        return "APKMirror"
 
     def get_versions(self, url: str) -> list[str]:
         clean_url = url.rstrip("/")
@@ -163,7 +167,8 @@ class APKMirrorDownloader(BaseDownloader):
         version: str,
         arch: str,
         dpi: str,
-        output_path: Path
+        output_path: Path,
+        app_id: str = ""
     ) -> Optional[Path]:
         log_info(f"[APKMirror] Resolving release page for version {version}...", indent=2)
         version_page_url = self._find_version_page(url, version)

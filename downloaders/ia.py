@@ -15,13 +15,17 @@ except ImportError:
     HAS_BS4 = False
 
 from core.http import http_client
-from core.logger import log_info, log_warn, log_error
+from core.logger import log_info, log_warn
 from downloaders.base import BaseDownloader
 
 class IADownloader(BaseDownloader):
     @property
     def name(self) -> str:
         return "ia"
+
+    @property
+    def display_name(self) -> str:
+        return "Internet Archive"
 
     def _extract_links(self, html: str) -> list[str]:
         if HAS_BS4:
@@ -51,7 +55,8 @@ class IADownloader(BaseDownloader):
         version: str,
         arch: str,
         dpi: str,
-        output_path: Path
+        output_path: Path,
+        app_id: str = ""
     ) -> Optional[Path]:
         log_info(f"[Internet Archive] Checking files for version {version} ({arch})...", indent=2)
         html = http_client.get_html(url)

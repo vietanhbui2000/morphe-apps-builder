@@ -15,13 +15,17 @@ except ImportError:
     HAS_BS4 = False
 
 from core.http import http_client
-from core.logger import log_info, log_warn, log_error
+from core.logger import log_info, log_warn
 from downloaders.base import BaseDownloader
 
 class APKPureDownloader(BaseDownloader):
     @property
     def name(self) -> str:
         return "apkpure"
+
+    @property
+    def display_name(self) -> str:
+        return "APKPure"
 
     def get_versions(self, url: str) -> list[str]:
         clean_url = url.rstrip("/")
@@ -59,7 +63,8 @@ class APKPureDownloader(BaseDownloader):
         version: str,
         arch: str,
         dpi: str,
-        output_path: Path
+        output_path: Path,
+        app_id: str = ""
     ) -> Optional[Path]:
         clean_url = url.rstrip("/")
         if clean_url.endswith("/versions") or clean_url.endswith("/download"):

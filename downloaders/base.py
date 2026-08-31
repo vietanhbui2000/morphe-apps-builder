@@ -11,7 +11,13 @@ class BaseDownloader(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
-        """Provider name (e.g. apkmirror, uptodown, etc.)"""
+        """Provider short slug (e.g. apkmirror, uptodown, etc.)"""
+        pass
+
+    @property
+    @abstractmethod
+    def display_name(self) -> str:
+        """Provider human-readable display name (e.g. APKMirror, AuroraStore, etc.)"""
         pass
 
     @abstractmethod
@@ -26,7 +32,8 @@ class BaseDownloader(ABC):
         version: str,
         arch: str,
         dpi: str,
-        output_path: Path
+        output_path: Path,
+        app_id: str = ""
     ) -> Optional[Path]:
         """
         Download the APK or APK bundle for the given version and target specs.

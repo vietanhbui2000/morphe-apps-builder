@@ -14,6 +14,8 @@ class GeneralConfig:
     keystore_password: str = "1234567890"
     default_cli_source: str = "MorpheApp/morphe-cli"
     default_patches_source: str = "MorpheApp/morphe-patches"
+    default_cli_version: str = "latest"
+    default_patches_version: str = "latest"
 
 @dataclass
 class AppConfig:
@@ -22,7 +24,7 @@ class AppConfig:
     app_name: str
     enabled: bool = True
     version: str = "auto"
-    arch: list[str] = field(default_factory=lambda: ["all"])
+    arch: list[str] = field(default_factory=lambda: ["universal"])
     dpi: str = ""
     cli_source: str = ""
     patches_source: str = ""
@@ -33,18 +35,13 @@ class AppConfig:
     apkpure_url: Optional[str] = None
     ia_url: Optional[str] = None
     direct_url: Optional[str] = None
-    aurora: bool = False
-    aurora_url: Optional[str] = None
+    aurorastore: bool = False
+    aurorastore_url: Optional[str] = None
     included_patches: list[str] = field(default_factory=list)
     excluded_patches: list[str] = field(default_factory=list)
     exclusive_patches: bool = False
     patcher_args: str = ""
     options: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-@dataclass
-class BuildTarget:
-    app: AppConfig
-    target_arch: str
 
 @dataclass
 class BuildResult:

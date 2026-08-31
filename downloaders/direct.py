@@ -7,13 +7,17 @@ from pathlib import Path
 from typing import Optional
 
 from core.http import http_client
-from core.logger import log_info, log_warn, log_error
+from core.logger import log_info
 from downloaders.base import BaseDownloader
 
 class DirectDownloader(BaseDownloader):
     @property
     def name(self) -> str:
         return "direct"
+
+    @property
+    def display_name(self) -> str:
+        return "Direct"
 
     def get_versions(self, url: str) -> list[str]:
         # Direct URLs don't have dynamic version listing
@@ -25,7 +29,8 @@ class DirectDownloader(BaseDownloader):
         version: str,
         arch: str,
         dpi: str,
-        output_path: Path
+        output_path: Path,
+        app_id: str = ""
     ) -> Optional[Path]:
         formatted_url = url.replace("{version}", version).replace("{arch}", arch)
         ext = ".apkm" if ".apkm" in formatted_url else (".xapk" if ".xapk" in formatted_url else ".apk")

@@ -75,8 +75,8 @@ The builder attempts downloaders in priority order based on which URLs are provi
 
 | Key | Description |
 | :--- | :--- |
-| `aurora` | `boolean` (`true`/`false`). Primary provider. Downloads directly from Google Play via Aurora Store anonymous token dispenser. |
-| `aurora_url` | Custom Aurora Store token dispenser URL (defaults to `https://auroraoss.com/api/auth`). |
+| `aurorastore` | `boolean` (`true`/`false`). Primary provider. Downloads directly from Google Play via Aurora Store anonymous token dispenser. |
+| `aurorastore_url` | Custom Aurora Store token dispenser URL (defaults to `https://auroraoss.com/api/auth`). |
 | `apkmirror_url` | APKMirror category/app URL. Automatically handles bundle merging and Cloudflare challenges. |
 | `uptodown_url` | Uptodown app URL. Scrapes version history and resolves direct CDN links. |
 | `apkpure_url` | APKPure app URL. Downloads APK or `.xapk` bundles. |
@@ -132,7 +132,7 @@ enabled = true
 id = "com.google.android.youtube"
 version = "auto"
 arch = ["all"]
-aurora = true
+aurorastore = true
 apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
 uptodown_url = "https://youtube.en.uptodown.com/android"
 ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.youtube"

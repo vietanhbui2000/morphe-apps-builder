@@ -21,11 +21,11 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
-from core.logger import log_info, log_warn, log_error
+from core.logger import log_info, log_warn
 from downloaders.base import BaseDownloader
 
 try:
-    from downloaders.aurora_pb2 import (
+    from downloaders.aurorastore_pb2 import (
         AndroidCheckinRequest,
         AndroidCheckinProto,
         AndroidBuildProto,
@@ -224,10 +224,14 @@ def _build_acquire_request(package_name: str, version_code: int, offer_type: int
     return request
 
 
-class AuroraDownloader(BaseDownloader):
+class AuroraStoreDownloader(BaseDownloader):
     @property
     def name(self) -> str:
-        return "aurora"
+        return "aurorastore"
+
+    @property
+    def display_name(self) -> str:
+        return "AuroraStore"
 
     def get_versions(self, url: str) -> list[str]:
         # Google Play does not provide a public historical version list.
@@ -246,7 +250,8 @@ class AuroraDownloader(BaseDownloader):
         version: str,
         arch: str,
         dpi: str,
-        output_path: Path
+        output_path: Path,
+        app_id: str = ""
     ) -> Optional[Path]:
         if not HAS_REQUESTS or not HAS_PROTOBUF:
             missing = []
@@ -254,14 +259,14 @@ class AuroraDownloader(BaseDownloader):
                 missing.append("requests")
             if not HAS_PROTOBUF:
                 missing.append("protobuf")
-            log_warn(f"[Aurora] Required libraries missing: {', '.join(missing)}. Install with `pip install {' '.join(missing)}`", indent=2)
+            log_warn(f"[AuroraStore] Required libraries missing: {', '.join(missing)}. Install with `pip install {' '.join(missing)}`", indent=2)
             return None
 
         # url can be the dispenser URL or package name
         dispenser_url = url if url.startswith("http") else DEFAULT_DISPENSER_URL
-        package_name = output_path.stem.split("_")[0] if "_" in output_path.stem else output_path.stem
+        package_name = app_id or (output_path.stem.split("_")[0] if "_" in output_path.stem else output_path.stem)
 
-        log_info(f"[Aurora] Connecting to dispenser {dispenser_url} for {package_name}...", indent=2)
+        log_info(f"[AuroraStore] Connecting to dispenser {dispenser_url} for {package_name}...", indent=2)
         session = self._init_session(dispenser_url)
 
         try:
@@ -278,7 +283,7 @@ class AuroraDownloader(BaseDownloader):
             email = disp_data.get("email")
             auth_token = disp_data.get("authToken") or disp_data.get("auth")
             if not email or not auth_token:
-                log_warn(f"[Aurora] Dispenser returned invalid data", indent=2)
+                log_warn(f"[AuroraStore] Dispenser returned invalid data", indent=2)
                 return None
 
             # 2. Checkin
@@ -326,14 +331,14 @@ class AuroraDownloader(BaseDownloader):
             wrapper = ResponseWrapper()
             wrapper.ParseFromString(details_resp.content)
             if not wrapper.HasField("payload") or not wrapper.payload.HasField("detailsResponse"):
-                log_warn(f"[Aurora] No detailsResponse for {package_name}", indent=2)
+                log_warn(f"[AuroraStore] No detailsResponse for {package_name}", indent=2)
                 return None
 
             item = wrapper.payload.detailsResponse.item
             version_code = item.details.appDetails.versionCode if (item.HasField("details") and item.details.HasField("appDetails")) else 0
             offer_type = item.offer[0].offerType if len(item.offer) > 0 else 1
             if version_code == 0:
-                log_warn(f"[Aurora] Could not resolve versionCode for {package_name}", indent=2)
+                log_warn(f"[AuroraStore] Could not resolve versionCode for {package_name}", indent=2)
                 return None
 
             # 5. Acquire & Purchase
@@ -356,7 +361,7 @@ class AuroraDownloader(BaseDownloader):
             p_wrapper.ParseFromString(purchase_resp.content)
             delivery_token = p_wrapper.payload.buyResponse.encodedDeliveryToken if (p_wrapper.HasField("payload") and p_wrapper.payload.HasField("buyResponse")) else ""
             if not delivery_token:
-                log_warn("[Aurora] Failed to obtain delivery token", indent=2)
+                log_warn("[AuroraStore] Failed to obtain delivery token", indent=2)
                 return None
 
             # 6. Delivery
@@ -370,12 +375,12 @@ class AuroraDownloader(BaseDownloader):
             d_wrapper = ResponseWrapper()
             d_wrapper.ParseFromString(deliv_resp.content)
             if not d_wrapper.HasField("payload") or not d_wrapper.payload.HasField("deliveryResponse"):
-                log_warn("[Aurora] No deliveryResponse in payload", indent=2)
+                log_warn("[AuroraStore] No deliveryResponse in payload", indent=2)
                 return None
 
             delivery = d_wrapper.payload.deliveryResponse
             if delivery.status != 1 or not delivery.HasField("appDeliveryData"):
-                log_warn(f"[Aurora] Delivery failed with status {delivery.status}", indent=2)
+                log_warn(f"[AuroraStore] Delivery failed with status {delivery.status}", indent=2)
                 return None
 
             app_data = delivery.appDeliveryData
@@ -384,7 +389,7 @@ class AuroraDownloader(BaseDownloader):
 
             # Download payload
             if splits:
-                log_info(f"[Aurora] Split APK detected ({len(splits)} splits). Downloading bundle...", indent=2)
+                log_info(f"[AuroraStore] Split APK detected ({len(splits)} splits). Downloading bundle...", indent=2)
                 dest_bundle = output_path.parent / f"{output_path.name}.apkm"
                 with tempfile.TemporaryDirectory() as tmp_dir:
                     tmp_p = Path(tmp_dir)
@@ -404,16 +409,16 @@ class AuroraDownloader(BaseDownloader):
                         for s in splits:
                             zf.write(tmp_p / s["name"], s["name"])
 
-                log_info(f"[Aurora] Saved split bundle to {dest_bundle.name}", indent=2)
+                log_info(f"[AuroraStore] Saved split bundle to {dest_bundle.name}", indent=2)
                 return dest_bundle
             else:
                 dest_apk = output_path.parent / f"{output_path.name}.apk"
-                log_info(f"[Aurora] Downloading standalone APK to {dest_apk.name}...", indent=2)
+                log_info(f"[AuroraStore] Downloading standalone APK to {dest_apk.name}...", indent=2)
                 r = session.get(download_url, stream=True, timeout=120)
                 r.raise_for_status()
                 dest_apk.write_bytes(r.content)
                 return dest_apk
 
         except Exception as e:
-            log_warn(f"[Aurora] Download failed: {e}", indent=2)
+            log_warn(f"[AuroraStore] Download failed: {e}", indent=2)
             return None

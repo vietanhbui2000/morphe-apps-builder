@@ -16,13 +16,17 @@ except ImportError:
     HAS_BS4 = False
 
 from core.http import http_client
-from core.logger import log_info, log_warn, log_error
+from core.logger import log_info, log_warn
 from downloaders.base import BaseDownloader
 
 class UptodownDownloader(BaseDownloader):
     @property
     def name(self) -> str:
         return "uptodown"
+
+    @property
+    def display_name(self) -> str:
+        return "Uptodown"
 
     def _get_app_info(self, base_url: str) -> Optional[tuple[str, str]]:
         clean_url = base_url.rstrip("/")
@@ -93,7 +97,8 @@ class UptodownDownloader(BaseDownloader):
         version: str,
         arch: str,
         dpi: str,
-        output_path: Path
+        output_path: Path,
+        app_id: str = ""
     ) -> Optional[Path]:
         info = self._get_app_info(url)
         if not info or not info[1]:
