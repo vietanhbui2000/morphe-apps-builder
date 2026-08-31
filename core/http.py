@@ -75,14 +75,14 @@ class HttpClient:
             payload = json.dumps({
                 "cmd": "request.get",
                 "url": url,
-                "maxTimeout": 30000
+                "maxTimeout": 60000
             }).encode("utf-8")
             req = urllib.request.Request(
                 self.flaresolverr_url,
                 data=payload,
                 headers={"Content-Type": "application/json", "User-Agent": self.user_agent}
             )
-            with urllib.request.urlopen(req, timeout=35) as resp:
+            with urllib.request.urlopen(req, timeout=70) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8", errors="ignore"))
                     if data.get("status") == "ok":
