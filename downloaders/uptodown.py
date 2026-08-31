@@ -149,19 +149,28 @@ class UptodownDownloader(BaseDownloader):
         data_url = None
         if HAS_BS4:
             detail_soup = BeautifulSoup(detail_html, "html.parser")
-            btn = detail_soup.select_one("#detail-download-button")
-            data_url = btn.get("data-url") if btn else None
+            btn = detail_soup.select_one("#detail-download-button") or detail_soup.select_one("button.download")
+            if btn:
+                data_url = btn.get("data-url")
 
-        if not data_url:
-            match = re.search(r'data-url="([^"]+)"', detail_html)
+        if not data_url or data_url == "apps":
+            match = re.search(r'id=["\']detail-download-button["\'][^>]*data-url=["\']([^"\']+)["\']', detail_html, re.I) or \
+                    re.search(r'data-url=["\']([^"\']+)["\'][^>]*id=["\']detail-download-button["\']', detail_html, re.I) or \
+                    re.search(r'class=["\'][^"\']*download[^"\']*["\'][^>]*data-url=["\']([^"\']+)["\']', detail_html, re.I)
             if match:
                 data_url = match.group(1)
 
-        if not data_url:
+        if not data_url or data_url == "apps":
             log_warn("[Uptodown] Could not resolve direct download data-url", indent=2)
             return None
 
-        final_dl_url = f"https://dw.uptodown.com/dwn/{data_url}"
+        if data_url.startswith("http://") or data_url.startswith("https://"):
+            final_dl_url = data_url
+        elif data_url.startswith("/"):
+            final_dl_url = f"https://dw.uptodown.com{data_url}"
+        else:
+            final_dl_url = f"https://dw.uptodown.com/dwn/{data_url}"
+
         ext = ".xapk" if is_bundle else ".apk"
         dest_file = output_path.parent / f"{output_path.name}{ext}"
 
