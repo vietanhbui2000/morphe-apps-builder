@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.apk import merge_bundle, strip_archs, sign_apk, ensure_apk_editor, ensure_keystore
+from core.apk import merge_bundle, strip_archs, sign_apk, ensure_apk_editor, ensure_keystore, get_apk_architectures
 from core.config import load_config
 from core.github import github_client
 from core.logger import (
@@ -42,71 +42,63 @@ MANIFEST_FILE = DOWNLOADS_DIR / "targets_manifest.json"
 
 
 def clean_workspace():
+    """Remove temporary and build output files."""
     log_info("Cleaning temporary and output artifacts...")
-    shutil.rmtree(TEMP_DIR, ignore_errors=True)
-    shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
+    for directory in (TEMP_DIR, OUTPUT_DIR):
+        if directory.is_dir():
+            shutil.rmtree(directory, ignore_errors=True)
     release_md = ROOT_DIR / "release.md"
     if release_md.is_file():
-        release_md.unlink()
+        release_md.unlink(missing_ok=True)
     log_success("Workspace cleaned.")
 
 
 def check_updates(config_path: Path) -> int:
-    """Check if any upstream patch releases have newer versions compared to release.md."""
-    log_stage("Checking for upstream updates")
+    """Check for upstream CLI and patches updates across all enabled apps."""
     general, apps = load_config(config_path)
+    enabled_apps = [a for a in apps if a.enabled]
 
-    release_md_path = ROOT_DIR / "release.md"
-    existing_log = ""
-    if release_md_path.is_file():
-        existing_log = release_md_path.read_text(encoding="utf-8")
+    log_stage("Checking for upstream updates")
+    sources = set((a.cli_source, a.patches_source) for a in enabled_apps)
 
-    updates_found = False
-    checked_sources = set()
+    for cli_src, patches_src in sources:
+        log_info(f"Checking {cli_src}...")
+        cli_rel = github_client.get_release(cli_src, "latest")
+        if cli_rel:
+            log_success(f"Latest CLI: {cli_rel.get('tag_name')} ({cli_src})", indent=1)
 
-    for app in apps:
-        if not app.enabled:
-            continue
+        log_info(f"Checking {patches_src}...")
+        patches_rel = github_client.get_release(patches_src, "latest")
+        if patches_rel:
+            log_success(f"Latest Patches: {patches_rel.get('tag_name')} ({patches_src})", indent=1)
 
-        source_key = f"{app.patches_source}:{app.patches_version}"
-        if source_key in checked_sources:
-            continue
-        checked_sources.add(source_key)
-
-        log_info(f"Checking {app.name} patch source: {app.patches_source} ({app.patches_version})...")
-        rel = github_client.get_release(app.patches_source, app.patches_version)
-        if not rel:
-            log_warn(f"Could not fetch release info for {app.patches_source}")
-            continue
-
-        tag_name = rel.get("tag_name", "")
-        if tag_name and tag_name not in existing_log:
-            log_success(f"New patch release detected: {app.patches_source} -> {tag_name}")
-            updates_found = True
-
-    if updates_found or not existing_log:
-        print("SHOULD_BUILD=1")
-        return 0
-    else:
-        print("SHOULD_BUILD=0")
-        return 0
+    return 0
 
 
-def resolve_app_version(app: AppConfig, cli_jar: Path, patch_file: Path, dry_run: bool = False) -> Optional[str]:
-    """Resolve compatible version for an app."""
+def resolve_app_version(
+    app: AppConfig,
+    cli_jar: Path,
+    patch_file: Path,
+    dry_run: bool = False
+) -> Optional[str]:
+    """Resolve target version for app (from config, patches compatibility list, or fallback)."""
     if app.version != "auto":
+        log_info(f"Using explicitly configured version: {app.version}", indent=1)
         return app.version
 
-    if dry_run and (not cli_jar.is_file() or not patch_file.is_file()):
+    if dry_run:
         return "auto"
 
-    log_info("Resolving highest compatible version from patch bundle...", indent=1)
-    detected_ver = morphe_patcher.get_compatible_version(cli_jar, patch_file, app.id)
-    if detected_ver:
-        log_success(f"Compatible version resolved: {detected_ver}", indent=1)
-        return detected_ver
+    # Try resolving from patch bundle compatibility list
+    if cli_jar.is_file() and patch_file.is_file():
+        supported_versions = morphe_patcher.list_versions(cli_jar, patch_file, app.id)
+        if supported_versions:
+            resolved = supported_versions[-1]
+            log_success(f"Resolved compatible version from patch bundle: {resolved}", indent=1)
+            return resolved
 
-    log_warn("Could not detect compatible version from patch bundle, attempting latest from downloaders...", indent=1)
+    # Fallback to scraping first available version from download providers
+    log_warn("Version not found in patch bundle. Falling back to latest from sources...", indent=1)
     sources = get_download_sources_for_app(app)
     for _, dl_inst, src_url in sources:
         vers = dl_inst.get_versions(src_url)
@@ -125,49 +117,56 @@ def download_single_target(
     cli_tag: str,
     patch_tag: str,
     dry_run: bool = False
-) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
-    Download phase for a single architecture target.
-    Returns (target_info_dict, error_message).
+    Download phase for an architecture target or dynamic multi-architecture expansion ('all').
+    Returns (list_of_target_info_dicts, error_message).
     """
     print()
     log_stage(f"Downloading {app.app_name} ({arch})")
 
     resolved_version = resolve_app_version(app, cli_jar, patch_file, dry_run=dry_run)
     if not resolved_version:
-        return None, "Could not resolve version for app"
+        return [], "Could not resolve version for app"
 
     if dry_run:
         log_info(f"[DRY-RUN] Would download {app.app_name} v{resolved_version} ({arch})", indent=1)
-        return {
+        base_dict = {
             "app": app.name,
             "id": app.id,
             "version": resolved_version,
-            "arch": arch,
-            "stock_apk": "",
             "cli_source": app.cli_source,
             "cli_version": cli_tag,
             "cli_file": str(cli_jar),
             "patches_source": app.patches_source,
             "patches_version": patch_tag,
             "patches_file": str(patch_file),
-        }, None
+            "stock_apk": "",
+        }
+        if arch == "all":
+            return [
+                {**base_dict, "arch": "universal"},
+                {**base_dict, "arch": "arm64-v8a"},
+                {**base_dict, "arch": "armeabi-v7a"},
+            ], None
+        return [{**base_dict, "arch": arch}], None
 
     sources = get_download_sources_for_app(app)
     if not sources:
-        return None, "No download sources configured in config.toml"
+        return [], "No download sources configured in config.toml"
 
     APKS_DIR.mkdir(parents=True, exist_ok=True)
     stock_apk_base = APKS_DIR / f"{app.id}_{resolved_version}_{arch}"
     downloaded_file: Optional[Path] = None
 
+    download_arch_query = "universal" if arch == "all" else arch
     for provider_name, dl_inst, src_url in sources:
         log_info(f"Attempting download via {provider_name}...", indent=1)
         try:
             downloaded_file = dl_inst.download(
                 url=src_url,
                 version=resolved_version,
-                arch=arch,
+                arch=download_arch_query,
                 dpi=app.dpi,
                 output_path=stock_apk_base
             )
@@ -180,13 +179,12 @@ def download_single_target(
             log_warn(f"Provider {provider_name} failed: {e}", indent=1)
 
     if not downloaded_file or not downloaded_file.is_file():
-        return None, "All download providers failed"
+        return [], "All download providers failed"
 
-    target_info = {
+    base_info = {
         "app": app.name,
         "id": app.id,
         "version": resolved_version,
-        "arch": arch,
         "stock_apk": str(downloaded_file),
         "cli_source": app.cli_source,
         "cli_version": cli_tag,
@@ -195,7 +193,19 @@ def download_single_target(
         "patches_version": patch_tag,
         "patches_file": str(patch_file),
     }
-    return target_info, None
+
+    if arch == "all":
+        # Inspect native ABIs inside the downloaded APK / bundle
+        detected_abis = get_apk_architectures(downloaded_file)
+        if detected_abis:
+            targets = [{**base_info, "arch": "universal"}]
+            for abi in detected_abis:
+                targets.append({**base_info, "arch": abi})
+            log_success(f"Detected architectures: universal, {', '.join(detected_abis)}", indent=1)
+            return targets, None
+        return [{**base_info, "arch": "universal"}], None
+
+    return [{**base_info, "arch": arch}], None
 
 
 def patch_single_target(
@@ -277,7 +287,8 @@ def patch_single_target(
 
     # 2. Patching
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    final_apk_name = f"{app_name}_v{version}_{arch}.apk"
+    arch_suffix = "" if arch in ("all", "universal", "") else f"_{arch}"
+    final_apk_name = f"{app_name}_v{version}{arch_suffix}.apk"
     output_apk = OUTPUT_DIR / final_apk_name
     temp_patched = TEMP_DIR / f"patched_{final_apk_name}"
 
@@ -380,13 +391,36 @@ def write_build_summary(results: List[BuildResult]) -> int:
     print(f"{Colors.BOLD}BUILD SUMMARY{Colors.RESET}")
     print("=" * 70)
 
-    successful_builds = [r for r in results if r.success]
-    failed_builds = [r for r in results if not r.success]
-
+    # Group results by app_name maintaining order
+    grouped: Dict[str, List[BuildResult]] = {}
     for r in results:
-        status_icon = f"{Colors.GREEN}✓ SUCCESS{Colors.RESET}" if r.success else f"{Colors.RED}✗ FAILED{Colors.RESET}"
-        detail = f"-> {r.output_apk.name}" if r.output_apk else f"({r.error_message})"
-        print(f"[{status_icon}] {r.app_name} ({r.arch}) v{r.version} {detail}")
+        grouped.setdefault(r.app_name, []).append(r)
+
+    for app_name, app_results in grouped.items():
+        all_success = all(r.success for r in app_results)
+        any_success = any(r.success for r in app_results)
+
+        if all_success:
+            status = f"[{Colors.GREEN}✓ SUCCESS{Colors.RESET}]"
+            apk_names = [
+                r.output_apk.name if r.output_apk else f"{r.app_name}_v{r.version}{'' if r.arch in ('all', 'universal', '') else f'_{r.arch}'}.apk"
+                for r in app_results
+            ]
+            print(f"{app_name} {status} -> {', '.join(apk_names)}")
+        elif any_success:
+            status = f"[{Colors.YELLOW}⚠ PARTIAL{Colors.RESET}]"
+            parts = []
+            for r in app_results:
+                if r.success and r.output_apk:
+                    parts.append(r.output_apk.name)
+                else:
+                    parts.append(f"{r.arch} failed ({r.error_message})")
+            print(f"{app_name} {status} -> {', '.join(parts)}")
+        else:
+            status = f"[{Colors.RED}✗ FAILED{Colors.RESET}]"
+            err_msgs = list(dict.fromkeys(r.error_message for r in app_results if r.error_message))
+            err_str = f" ({', '.join(err_msgs)})" if err_msgs else ""
+            print(f"{app_name} {status}{err_str}")
 
     # Write release.md for GitHub Releases
     release_md = ROOT_DIR / "release.md"
@@ -395,6 +429,7 @@ def write_build_summary(results: List[BuildResult]) -> int:
     repo = _get_github_repo()
     release_tag = os.environ.get("RELEASE_TAG", "").strip()
 
+    successful_builds = [r for r in results if r.success]
     if successful_builds:
         app_blocks = []
         for r in successful_builds:
@@ -402,7 +437,11 @@ def write_build_summary(results: List[BuildResult]) -> int:
 
             dl_btn = ""
             if repo and release_tag:
-                apk_name = r.output_apk.name if r.output_apk else f"{r.app_name}_v{r.version}_{r.arch}.apk"
+                if r.output_apk:
+                    apk_name = r.output_apk.name
+                else:
+                    arch_suffix = "" if r.arch in ("all", "universal", "") else f"_{r.arch}"
+                    apk_name = f"{r.app_name}_v{r.version}{arch_suffix}.apk"
                 dl_url = f"https://github.com/{repo}/releases/download/{release_tag}/{apk_name}"
                 dl_btn = f" [↓]({dl_url})"
 
@@ -535,7 +574,7 @@ def main() -> int:
                 continue
 
             for arch in app.arch:
-                target_info, err = download_single_target(
+                targets_list, err = download_single_target(
                     app=app,
                     arch=arch,
                     cli_jar=cli_jar,
@@ -544,8 +583,8 @@ def main() -> int:
                     patch_tag=patch_tag,
                     dry_run=args.dry_run
                 )
-                if target_info:
-                    download_targets.append(target_info)
+                if targets_list:
+                    download_targets.extend(targets_list)
                 else:
                     failed_downloads.append(BuildResult(
                         app_name=app.app_name,
