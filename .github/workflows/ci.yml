@@ -12,7 +12,7 @@ on:
 
 jobs:
   check:
-    name: Check New Patches
+    name: Check New Updates
     runs-on: ubuntu-latest
     permissions:
       contents: write
