@@ -667,13 +667,13 @@ def main() -> int:
     # Group targets by app maintaining order
     targets_by_app: Dict[str, List[Dict[str, Any]]] = {}
     for t in targets_to_patch:
-        app_name = t.get("name", "")
-        if app_name:
-            targets_by_app.setdefault(app_name, []).append(t)
+        name = t.get("name", "")
+        if name:
+            targets_by_app.setdefault(name, []).append(t)
 
     total_patch_apps = len(targets_by_app)
-    for app_idx, (app_name, app_targets) in enumerate(targets_by_app.items(), 1):
-        app = apps_map.get(app_name)
+    for app_idx, (name, app_targets) in enumerate(targets_by_app.items(), 1):
+        app = apps_map.get(name)
         if not app:
             continue
 
