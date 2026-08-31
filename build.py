@@ -436,7 +436,7 @@ def write_build_summary(results: List[BuildResult]) -> int:
                 r.output_apk.name if r.output_apk else f"{r.app_name}_v{r.version}{'' if r.arch in ('all', 'universal', '') else f'_{r.arch}'}.apk"
                 for r in app_results
             ]
-            print(f"{app_name} {status} -> {', '.join(apk_names)}")
+            print(f"{app_name}: {status} -> {', '.join(apk_names)}")
         elif any_success:
             status = f"[{Colors.YELLOW}⚠ PARTIAL{Colors.RESET}]"
             parts = []
@@ -445,12 +445,12 @@ def write_build_summary(results: List[BuildResult]) -> int:
                     parts.append(r.output_apk.name)
                 else:
                     parts.append(f"{r.arch} failed ({r.error_message})")
-            print(f"{app_name} {status} -> {', '.join(parts)}")
+            print(f"{app_name}: {status} -> {', '.join(parts)}")
         else:
             status = f"[{Colors.RED}✗ FAILED{Colors.RESET}]"
             err_msgs = list(dict.fromkeys(r.error_message for r in app_results if r.error_message))
             err_str = f" ({', '.join(err_msgs)})" if err_msgs else ""
-            print(f"{app_name} {status}{err_str}")
+            print(f"{app_name}: {status}{err_str}")
 
     # Write release.md for GitHub Releases
     release_md = ROOT_DIR / "release.md"
@@ -551,8 +551,8 @@ def main() -> int:
 
         total_download_tasks = len(enabled_apps) + 1
 
-        # 1. Download Prebuilts (CLI & Patches)
-        group_start(f"Download [1/{total_download_tasks}]: Prebuilts (CLI & Patches)")
+        # 1. Download Prebuilts (Tools, CLI & Patches)
+        group_start(f"Download [1/{total_download_tasks}]: Prebuilts (Tools, CLI & Patches)")
         log_stage("Fetching Prebuilt Tools, CLI & Patches")
 
         # bin tools
@@ -657,19 +657,31 @@ def main() -> int:
     log_stage("Starting Patching & Signing Phase")
     results: List[BuildResult] = []
 
-    for index, t in enumerate(targets_to_patch, 1):
-        app = apps_map.get(t.get("name", t.get("app", t.get("app_name"))))
+    # Group targets by app maintaining order
+    targets_by_app: Dict[str, List[Dict[str, Any]]] = {}
+    for t in targets_to_patch:
+        app_name = t.get("name", t.get("app", t.get("app_name", "")))
+        if app_name:
+            targets_by_app.setdefault(app_name, []).append(t)
+
+    total_patch_apps = len(targets_by_app)
+    for app_idx, (app_name, app_targets) in enumerate(targets_by_app.items(), 1):
+        app = apps_map.get(app_name)
         if not app:
             continue
 
-        group_start(f"Patch [{index}/{len(targets_to_patch)}]: {app.name} ({t['arch']})")
-        res = patch_single_target(
-            target_info=t,
-            app=app,
-            general=general,
-            dry_run=args.dry_run
-        )
-        results.append(res)
+        group_start(f"Patch [{app_idx}/{total_patch_apps}]: {app.name}")
+        log_app_banner(app_idx, total_patch_apps, app.app_name, app.id)
+
+        for t in app_targets:
+            res = patch_single_target(
+                target_info=t,
+                app=app,
+                general=general,
+                dry_run=args.dry_run
+            )
+            results.append(res)
+
         group_end()
 
     all_results = failed_downloads + results if not args.patch_only else results
