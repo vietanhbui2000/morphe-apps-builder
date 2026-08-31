@@ -81,7 +81,7 @@ pip install -r requirements.txt
 
 ## Configuration Guide (`config.toml`)
 
-See [CONFIG.md](CONFIG.md) for the complete reference and schema.
+See [CONFIG.md](CONFIG.md) for configuration schema and [KEYSTORE.md](KEYSTORE.md) for signing details.
 
 ### General Settings
 ```toml
@@ -126,6 +126,7 @@ morphe-apps-builder/
 ├── config.toml                 # Declarative app and patch definitions
 ├── CONFIG.md                   # Detailed configuration reference and schema
 ├── keystore.keystore           # Release signing keystore (alias: vietanhbui2000)
+├── KEYSTORE.md                 # Keystore management, PKCS12 format & signing guide
 ├── requirements.txt            # Python dependencies (requests, beautifulsoup4, protobuf)
 ├── build.py                    # Main CLI orchestrator (download, patch, release.md generation)
 │
