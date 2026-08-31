@@ -87,7 +87,7 @@ class GitHubClient:
         if "api.github.com" in download_url and GITHUB_TOKEN:
             headers["Accept"] = "application/octet-stream"
 
-        log_info(f"Downloading {asset.get('name')} from GitHub...", indent=2)
+        log_info(f"Downloading {asset.get('name')}...", indent=2)
         tmp_path = output_path.with_suffix(f"{output_path.suffix}.tmp")
         try:
             if HAS_REQUESTS:

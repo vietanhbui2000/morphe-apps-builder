@@ -56,6 +56,7 @@ def ensure_keystore(
 def ensure_apk_editor() -> bool:
     if APK_EDITOR_JAR.is_file() and APK_EDITOR_JAR.stat().st_size > 0:
         return True
+    APK_EDITOR_JAR.parent.mkdir(parents=True, exist_ok=True)
     log_info("Downloading APKEditor.jar...", indent=2)
     return http_client.download_file(APK_EDITOR_URL, APK_EDITOR_JAR)
 

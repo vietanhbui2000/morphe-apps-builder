@@ -130,6 +130,7 @@ def download_single_target(
     Download phase for a single architecture target.
     Returns (target_info_dict, error_message).
     """
+    print()
     log_stage(f"Downloading {app.app_name} ({arch})")
 
     resolved_version = resolve_app_version(app, cli_jar, patch_file, dry_run=dry_run)
@@ -466,6 +467,7 @@ def main() -> int:
     targets_to_patch: List[Dict[str, Any]] = []
 
     if not args.patch_only:
+        print()
         log_stage("Starting Download Phase (Prebuilts & Stock APKs)")
         download_targets: List[Dict[str, Any]] = []
         failed_downloads: List[BuildResult] = []
@@ -474,7 +476,13 @@ def main() -> int:
 
         # 1. Download Prebuilts (CLI & Patches)
         group_start(f"Download [1/{total_download_tasks}]: Prebuilts (CLI & Patches)")
-        log_stage("Fetching Prebuilt CLI & Patches")
+        log_stage("Fetching Prebuilt Tools, CLI & Patches")
+
+        # bin tools
+        if not args.dry_run:
+            ensure_apk_editor()
+        else:
+            log_info("[DRY-RUN] Would download APKEditor.jar...", indent=2)
 
         prebuilts_cache: Dict[Tuple[str, str, str, str], Tuple[Optional[Path], Optional[Path], str, str]] = {}
         unique_prebuilts = list(dict.fromkeys(
@@ -569,6 +577,7 @@ def main() -> int:
             log_error("No downloaded targets found in manifest. Run with --download-only first or without flags.")
             return 1
 
+    print()
     log_stage("Starting Patching & Signing Phase")
     results: List[BuildResult] = []
 
