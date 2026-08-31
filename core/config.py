@@ -37,7 +37,13 @@ def _parse_patches_list(raw: Any) -> list[str]:
 def _normalize_arch(raw: Any) -> list[str]:
     """Normalize arch option to a list of target architectures."""
     if isinstance(raw, list):
-        archs = [str(a).strip() for a in raw if str(a).strip()]
+        archs: list[str] = []
+        for a in raw:
+            s = str(a).strip()
+            if s == "both":
+                archs.extend(["arm64-v8a", "armeabi-v7a"])
+            elif s:
+                archs.append(s)
         if "all" in archs:
             return ["all"]
         return archs or ["universal"]
@@ -60,7 +66,7 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
     # General configuration
     gen_data = data.get("general", {})
     general = GeneralConfig(
-        keystore=gen_data.get("keystore", "keystore.keystore"),
+        keystore=gen_data.get("keystore", gen_data.get("keystore_file", "keystore.keystore")),
         keystore_alias=gen_data.get("keystore_alias", "vietanhbui2000"),
         keystore_password=gen_data.get("keystore_password", gen_data.get("keystore_pass", "1234567890")),
         default_cli_source=gen_data.get("default_cli_source", "MorpheApp/morphe-cli"),

@@ -66,11 +66,12 @@ class GitHubClient:
                         return rel
                 return releases[0]
         else:
-            tag_name = tag if tag.startswith("v") else tag
-            data = self._get_json(f"{api_url}/tags/{tag_name}")
+            data = self._get_json(f"{api_url}/tags/{tag}")
             if data:
                 return data
-            if not tag.startswith("v"):
+            if tag.startswith("v"):
+                return self._get_json(f"{api_url}/tags/{tag[1:]}")
+            else:
                 return self._get_json(f"{api_url}/tags/v{tag}")
 
         return None
@@ -156,10 +157,10 @@ class GitHubClient:
             return None, None, "", ""
 
         safe_cli_source = cli_source.replace("/", "_")
-        cli_file = cli_dir / f"{safe_cli_source}_{cli_tag}.jar"
+        cli_path = cli_dir / f"{safe_cli_source}_{cli_tag}.jar"
         cli_owner = cli_source.split("/")[0]
         cli_display = f"{cli_owner}_{cli_asset['name']}"
-        if not self.download_asset(cli_asset, cli_file, display_name=cli_display):
+        if not self.download_asset(cli_asset, cli_path, display_name=cli_display):
             return None, None, "", ""
 
         # 2. Patches
@@ -186,12 +187,12 @@ class GitHubClient:
 
         ext = ".mpp" if patches_asset["name"].endswith(".mpp") else ".jar"
         safe_patches_source = patches_source.replace("/", "_")
-        patches_file = p_dir / f"{safe_patches_source}_{patches_tag}{ext}"
+        patches_path = p_dir / f"{safe_patches_source}_{patches_tag}{ext}"
         patches_owner = patches_source.split("/")[0]
         patches_display = f"{patches_owner}_{patches_asset['name']}"
-        if not self.download_asset(patches_asset, patches_file, display_name=patches_display):
+        if not self.download_asset(patches_asset, patches_path, display_name=patches_display):
             return None, None, "", ""
 
-        return cli_file, patches_file, cli_tag, patches_tag
+        return cli_path, patches_path, cli_tag, patches_tag
 
 github_client = GitHubClient()
