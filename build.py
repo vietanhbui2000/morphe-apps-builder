@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -357,6 +358,21 @@ def load_manifest() -> List[Dict[str, Any]]:
         return []
 
 
+def _get_github_repo() -> str:
+    repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    if not repo:
+        try:
+            out = subprocess.run(["git", "config", "--get", "remote.origin.url"], capture_output=True, text=True, check=False)
+            url = out.stdout.strip()
+            if "github.com" in url:
+                cleaned = url.split("github.com", 1)[1].lstrip("/:").removesuffix(".git")
+                if "/" in cleaned:
+                    repo = cleaned
+        except Exception:
+            pass
+    return repo
+
+
 def write_build_summary(results: List[BuildResult]) -> int:
     """Generate console summary and build.md."""
     print("\n" + "=" * 70)
@@ -375,43 +391,33 @@ def write_build_summary(results: List[BuildResult]) -> int:
     release_md = ROOT_DIR / "release.md"
     sections = []
 
+    repo = _get_github_repo()
+    release_tag = os.environ.get("RELEASE_TAG", "").strip()
+
     if successful_builds:
         app_blocks = []
         for r in successful_builds:
             arch_str = "" if r.arch in ("all", "universal", "") else f" ({r.arch})"
-            header = f"{r.app_name}{arch_str}: {r.version}  "
-            sub = f"└ {r.cli_source} {r.cli_tag} + {r.patches_source} {r.patches_tag}".strip()
+
+            dl_btn = ""
+            if repo and release_tag:
+                apk_name = r.output_apk.name if r.output_apk else f"{r.app_name}_v{r.version}_{r.arch}.apk"
+                dl_url = f"https://github.com/{repo}/releases/download/{release_tag}/{apk_name}"
+                dl_btn = f" [↓]({dl_url})"
+
+            header = f"{r.app_name}{arch_str}: {r.version}{dl_btn}  "
+
+            cli_link = f"[{r.cli_tag}](https://github.com/{r.cli_source}/releases/tag/{r.cli_tag})" if r.cli_tag else ""
+            cli_str = f"{r.cli_source} {cli_link}".strip()
+
+            patches_link = f"[{r.patches_tag}](https://github.com/{r.patches_source}/releases/tag/{r.patches_tag})" if r.patches_tag else ""
+            patches_str = f"{r.patches_source} {patches_link}".strip()
+
+            sub = f"└ {cli_str} + {patches_str}"
             app_blocks.append(f"{header}\n{sub}")
         sections.append("\n\n".join(app_blocks))
 
-        # Collect unique CLI sources first, then Patch sources
-        cli_sources = []
-        seen_cli = set()
-        for r in successful_builds:
-            if r.cli_source:
-                key = (r.cli_source, r.cli_tag)
-                if key not in seen_cli:
-                    seen_cli.add(key)
-                    cli_sources.append(key)
-
-        patch_sources = []
-        seen_patches = set()
-        for r in successful_builds:
-            if r.patches_source:
-                key = (r.patches_source, r.patches_tag)
-                if key not in seen_patches:
-                    seen_patches.add(key)
-                    patch_sources.append(key)
-
-        all_sources = cli_sources + patch_sources
-        if all_sources:
-            source_lines = ["Sources  "]
-            for repo, tag in all_sources:
-                tag_display = f"[{tag}](https://github.com/{repo}/releases/tag/{tag})" if tag else ""
-                source_lines.append(f"[{repo}](https://github.com/{repo}) {tag_display}  ")
-            sections.append("\n".join(source_lines))
-
-        sections.append("ℹ Install [MicroG](https://github.com/MorpheApp/MicroG-RE/) to enable Google account authentication and services for Morphe apps.")
+        sections.append("ℹ Install [MicroG ↗](https://github.com/MorpheApp/MicroG-RE/) to enable Google account authentication and services for Morphe apps.")
 
     release_md.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
     log_success(f"Wrote release notes to {release_md.name}")
