@@ -5,6 +5,7 @@ Registry and dispatcher for modular downloaders.
 
 from typing import List, Tuple
 from core.models import AppConfig
+from downloaders.base import BaseDownloader
 from downloaders.apkmirror import APKMirrorDownloader
 from downloaders.uptodown import UptodownDownloader
 from downloaders.apkpure import APKPureDownloader

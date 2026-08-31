@@ -10,7 +10,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.apk import merge_bundle, strip_archs, sign_apk, ensure_apk_editor, ensure_keystore
 from core.config import load_config
