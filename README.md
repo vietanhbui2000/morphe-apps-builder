@@ -28,7 +28,7 @@ The builder is designed for zero-maintenance CI/CD automation:
 3. Push changes to `main`:
    - **Automatic Trigger on Config Update**: Pushing edits to `config.toml` automatically starts a new build.
    - **Daily Scheduled Check (`ci.yml`)**: Runs daily at 05:00 UTC+7. If upstream patch repositories have newer releases than your previous release, it triggers the build automatically.
-   - **Manual Build (`build.yml`)**: Go to **Actions** $\rightarrow$ **Build & Release APKs** $\rightarrow$ **Run workflow**.
+   - **Manual Build (`build.yml`)**: Go to **Actions** $\rightarrow$ **Build APKs** $\rightarrow$ **Run workflow**.
 4. Download your patched and signed APKs directly from GitHub **Releases**.
 
 ### 2. Local CLI Usage
@@ -125,7 +125,7 @@ morphe-apps-builder/
 ├── CONFIG.md                   # Detailed configuration reference and schema
 ├── keystore.keystore           # Release signing keystore (alias: vietanhbui2000)
 ├── KEYSTORE.md                 # Keystore management, PKCS12 format & signing guide
-├── requirements.txt            # Python dependencies (requests, beautifulsoup4, protobuf)
+├── requirements.txt            # Python dependencies (requests, beautifulsoup4, urllib3, protobuf)
 ├── build.py                    # Main CLI orchestrator (download, patch, release.md generation)
 │
 ├── .github/                    # CI/CD automation

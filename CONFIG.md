@@ -138,13 +138,13 @@ enabled = true
 id = "com.google.android.youtube"
 version = "auto"
 arch = ["universal"]
-apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
-uptodown_url = "https://youtube.en.uptodown.com/android"
-ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.youtube"
 cli_source = "MorpheApp/morphe-cli"
 cli_version = "latest"
 patches_source = "MorpheApp/morphe-patches"
 patches_version = "latest"
+apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
+uptodown_url = "https://youtube.en.uptodown.com/android"
+ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.youtube"
 exclusive_patches = false
 included_patches = [
   "Add to queue",
