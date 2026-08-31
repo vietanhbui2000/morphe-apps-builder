@@ -47,7 +47,7 @@ def clean_workspace():
     for directory in (TEMP_DIR, OUTPUT_DIR):
         if directory.is_dir():
             shutil.rmtree(directory, ignore_errors=True)
-    release_md = ROOT_DIR / "release.md"
+    release_md = ROOT_DIR / "RELEASE.md"
     if release_md.is_file():
         release_md.unlink(missing_ok=True)
     log_success("Workspace cleaned.")
@@ -61,7 +61,7 @@ def check_updates(config_path: Path) -> int:
     log_stage("Checking for upstream updates")
     sources = set((a.cli_source, a.patches_source) for a in enabled_apps)
 
-    release_md = ROOT_DIR / "release.md"
+    release_md = ROOT_DIR / "RELEASE.md"
     prev_release_text = release_md.read_text(encoding="utf-8") if release_md.is_file() else ""
     should_build = not bool(prev_release_text)
 
@@ -415,7 +415,7 @@ def _get_github_repo() -> str:
 
 
 def write_build_summary(results: List[BuildResult]) -> int:
-    """Generate console summary and release.md."""
+    """Generate console summary and RELEASE.md."""
     print("=" * 70)
     print(f"{Colors.BOLD}BUILD SUMMARY{Colors.RESET}")
     print("=" * 70)
@@ -451,8 +451,8 @@ def write_build_summary(results: List[BuildResult]) -> int:
             err_str = f" ({', '.join(err_msgs)})" if err_msgs else ""
             print(f"{name}: {status}{err_str}")
 
-    # Write release.md for GitHub Releases
-    release_md = ROOT_DIR / "release.md"
+    # Write RELEASE.md for GitHub Releases
+    release_md = ROOT_DIR / "RELEASE.md"
     sections = []
 
     repo = _get_github_repo()
@@ -510,7 +510,7 @@ def main() -> int:
     parser.add_argument("--download-only", action="store_true", help="Download prebuilts and stock APKs only")
     parser.add_argument("--patch-only", action="store_true", help="Patch and sign pre-downloaded APKs only")
     parser.add_argument("--check-updates", action="store_true", help="Check for patch updates without building")
-    parser.add_argument("--clean", action="store_true", help="Clean temp, output, and release.md artifacts")
+    parser.add_argument("--clean", action="store_true", help="Clean temp, output, and RELEASE.md artifacts")
     parser.add_argument("--dry-run", action="store_true", help="Inspect execution plan without downloading or patching")
     args = parser.parse_args()
 

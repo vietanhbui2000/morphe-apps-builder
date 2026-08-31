@@ -94,9 +94,9 @@ jobs:
         run: |
           DELIM="$(openssl rand -hex 8)"
           echo "NOTES<<${DELIM}" >> "$GITHUB_OUTPUT"
-          cat release.md >> "$GITHUB_OUTPUT"
+          cat RELEASE.md >> "$GITHUB_OUTPUT"
           echo "${DELIM}" >> "$GITHUB_OUTPUT"
-          cp -f release.md release.tmp
+          cp -f RELEASE.md release.tmp
 
       - name: Publish GitHub Release
         env:
@@ -113,13 +113,13 @@ jobs:
             exit 1
           fi
 
-      - name: Commit release.md to releaselog branch
+      - name: Commit RELEASE.md to releaselog branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -f releaselog 2>/dev/null || git switch --discard-changes --orphan releaselog
-          cp -f release.tmp release.md
-          git add release.md
+          cp -f release.tmp RELEASE.md
+          git add RELEASE.md
           if ! git diff --cached --quiet; then
             git commit -m "Release ${{ steps.tag_gen.outputs.RELEASE_TAG }}"
             git push origin HEAD:releaselog

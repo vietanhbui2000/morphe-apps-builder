@@ -126,7 +126,7 @@ morphe-apps-builder/
 ├── keystore.keystore           # Release signing keystore (alias: vietanhbui2000)
 ├── KEYSTORE.md                 # Keystore management, PKCS12 format & signing guide
 ├── requirements.txt            # Python dependencies (requests, beautifulsoup4, urllib3, protobuf)
-├── build.py                    # Main CLI orchestrator (download, patch, release.md generation)
+├── build.py                    # Main CLI orchestrator (download, patch, RELEASE.md generation)
 │
 ├── .github/                    # CI/CD automation
 │   └── workflows/
