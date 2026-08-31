@@ -435,29 +435,24 @@ def write_build_summary(results: List[BuildResult]) -> int:
             continue
 
         first_r = success_results[0]
-        ver_tag = f"v{first_r.version}" if not first_r.version.startswith("v") else first_r.version
+        target_links = []
+        is_multi = len(success_results) > 1
+        for r in success_results:
+            r_ver = f"v{r.version}" if not r.version.startswith("v") else r.version
+            if is_multi or r.arch not in ("all", "universal", ""):
+                label = f"{r_ver} ({r.arch})"
+            else:
+                label = r_ver
 
-        if len(success_results) == 1:
-            r = success_results[0]
-            arch_prefix = "" if r.arch in ("all", "universal", "") else f"({r.arch}) "
-            dl_btn = ""
             if repo and release_tag:
-                apk_name = r.output_apk.name if r.output_apk else f"{r.app_name}_{ver_tag}{'' if r.arch in ('all', 'universal', '') else f'_{r.arch}'}.apk"
+                apk_name = r.output_apk.name if r.output_apk else f"{r.app_name}_{r_ver}{'' if r.arch in ('all', 'universal', '') else f'_{r.arch}'}.apk"
                 dl_url = f"https://github.com/{repo}/releases/download/{release_tag}/{apk_name}"
-                dl_btn = f"[↓]({dl_url})"
-            targets_str = f"{arch_prefix}{dl_btn}".strip()
-            header = f"{app_name}: {ver_tag} {targets_str}".rstrip() + "  "
-        else:
-            target_entries = []
-            for r in success_results:
-                dl_btn = ""
-                if repo and release_tag:
-                    apk_name = r.output_apk.name if r.output_apk else f"{r.app_name}_{ver_tag}_{r.arch}.apk"
-                    dl_url = f"https://github.com/{repo}/releases/download/{release_tag}/{apk_name}"
-                    dl_btn = f" [↓]({dl_url})"
-                target_entries.append(f"({r.arch}){dl_btn}")
-            targets_str = " | ".join(target_entries)
-            header = f"{app_name}: {ver_tag} {targets_str}  "
+                target_links.append(f"[{label}]({dl_url})")
+            else:
+                target_links.append(label)
+
+        targets_str = " | ".join(target_links)
+        header = f"{app_name}: {targets_str}  "
 
         cli_link = f"[{first_r.cli_tag}](https://github.com/{first_r.cli_source}/releases/tag/{first_r.cli_tag})" if first_r.cli_tag else ""
         cli_str = f"{first_r.cli_source} {cli_link}".strip()
