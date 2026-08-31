@@ -11,9 +11,9 @@ Adding an app is as simple as defining its section, package name, and at least o
 ```toml
 [Twitch]
 id = "tv.twitch.android.app"
-patches_source = "arandomhooman/hoomans-morphe-patches"
 apkmirror_url = "https://www.apkmirror.com/apk/twitch-interactive-inc/twitch/"
 uptodown_url = "https://twitch.en.uptodown.com/android"
+patches_source = "arandomhooman/hoomans-morphe-patches"
 included_patches = [
   "7TV and BTTV emotes",
   "Block live ads",
