@@ -1,4 +1,4 @@
-name: Build & Release APKs
+name: Build APKs
 
 on:
   workflow_call:
