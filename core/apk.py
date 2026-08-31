@@ -106,6 +106,22 @@ def merge_bundle(
 
     return False
 
+def get_apk_architectures(apk_path: Path) -> list[str]:
+    """Inspect lib/ directory of an APK or bundle to return list of native ABIs present."""
+    if not apk_path.is_file():
+        return []
+    try:
+        with zipfile.ZipFile(apk_path, "r") as z:
+            archs = set()
+            for name in z.namelist():
+                if name.startswith("lib/") and "/" in name[4:]:
+                    abi = name[4:].split("/", 1)[0].strip()
+                    if abi:
+                        archs.add(abi)
+            return sorted(list(archs))
+    except Exception:
+        return []
+
 def strip_archs(apk_path: Path, keep_arch: str, output_path: Path) -> bool:
     """Strip unused native architectures from lib/ inside the APK."""
     if keep_arch in ("all", "universal", ""):
@@ -113,19 +129,14 @@ def strip_archs(apk_path: Path, keep_arch: str, output_path: Path) -> bool:
             shutil.copy2(apk_path, output_path)
         return True
 
-    arch_mapping = {
-        "arm64-v8a": ["armeabi-v7a", "x86", "x86_64", "mips", "mips64"],
-        "arm-v7a": ["arm64-v8a", "x86", "x86_64", "mips", "mips64"],
-        "armeabi-v7a": ["arm64-v8a", "x86", "x86_64", "mips", "mips64"],
-        "x86": ["arm64-v8a", "armeabi-v7a", "x86_64", "mips", "mips64"],
-        "x86_64": ["arm64-v8a", "armeabi-v7a", "x86", "mips", "mips64"],
+    alias_map = {
+        "arm-v7a": "armeabi-v7a",
+        "armeabi-v7a": "armeabi-v7a",
+        "arm64-v8a": "arm64-v8a",
+        "x86": "x86",
+        "x86_64": "x86_64",
     }
-
-    archs_to_remove = arch_mapping.get(keep_arch, [])
-    if not archs_to_remove:
-        if apk_path != output_path:
-            shutil.copy2(apk_path, output_path)
-        return True
+    normalized_keep = alias_map.get(keep_arch, keep_arch)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temp_dir = Path(tempfile.mkdtemp(prefix="apk_strip_"))
@@ -136,10 +147,11 @@ def strip_archs(apk_path: Path, keep_arch: str, output_path: Path) -> bool:
 
         lib_dir = temp_dir / "lib"
         if lib_dir.is_dir():
-            for unwanted in archs_to_remove:
-                unwanted_dir = lib_dir / unwanted
-                if unwanted_dir.is_dir():
-                    shutil.rmtree(unwanted_dir, ignore_errors=True)
+            for d in lib_dir.iterdir():
+                if d.is_dir():
+                    norm_name = alias_map.get(d.name, d.name)
+                    if norm_name != normalized_keep:
+                        shutil.rmtree(d, ignore_errors=True)
 
         tmp_out = output_path.parent / f"{output_path.name}.stripped.tmp"
         with zipfile.ZipFile(tmp_out, "w", compression=zipfile.ZIP_DEFLATED) as zout:

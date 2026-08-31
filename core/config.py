@@ -37,13 +37,18 @@ def _parse_patch_list(raw: Any) -> list[str]:
 def _normalize_arch(raw: Any) -> list[str]:
     """Normalize arch option to a list of target architectures."""
     if isinstance(raw, list):
-        return [str(a).strip() for a in raw if str(a).strip()]
+        archs = [str(a).strip() for a in raw if str(a).strip()]
+        if "all" in archs:
+            return ["all"]
+        return archs or ["universal"]
     if isinstance(raw, str):
         s = raw.strip()
+        if s == "all":
+            return ["all"]
         if s == "both":
             return ["arm64-v8a", "armeabi-v7a"]
-        return [s]
-    return ["all"]
+        return [s] if s else ["universal"]
+    return ["universal"]
 
 def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
     if not config_path.is_file():
