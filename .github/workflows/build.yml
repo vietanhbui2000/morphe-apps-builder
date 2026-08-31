@@ -60,7 +60,7 @@ jobs:
       - name: Generate Release Tag
         id: tag_gen
         run: |
-          RELEASE_TAG="$(date +'%Y.%m.%d-%H%M')"
+          RELEASE_TAG="$(date +'%y%m%d%H%M%S')"
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Prune Old Releases & Orphaned Tags
@@ -102,7 +102,7 @@ jobs:
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TITLE: "Release ${{ steps.tag_gen.outputs.RELEASE_TAG }}"
+          TITLE: "${{ steps.tag_gen.outputs.RELEASE_TAG }}"
           TAG: "${{ steps.tag_gen.outputs.RELEASE_TAG }}"
           NOTES: "${{ steps.release_notes.outputs.NOTES }}"
         run: |
