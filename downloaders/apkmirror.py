@@ -225,32 +225,58 @@ class APKMirrorDownloader(BaseDownloader):
             log_warn("[APKMirror] No variants found on version page", indent=2)
             return None
 
-        target_arch = arch.lower()
-        matched_variant = None
-        valid_archs = ["universal", "noarch"]
-        if target_arch not in ("all", ""):
-            valid_archs.append(target_arch)
-            if target_arch == "arm-v7a":
-                valid_archs.append("armeabi-v7a")
-            elif target_arch == "armeabi-v7a":
-                valid_archs.append("arm-v7a")
+        target_arch = (arch or "universal").lower()
+        target_dpi = (dpi or "nodpi").lower()
 
-        target_dpi = dpi.lower() if dpi else ""
-        for pref_type in ("APK", "BUNDLE"):
-            for v in variants:
-                if v["type"] != pref_type:
-                    continue
-                v_text = v["text"]
-                arch_match = target_arch in ("all", "") or any(a in v_text for a in valid_archs)
-                dpi_match = not target_dpi or target_dpi in v_text
-                if arch_match and dpi_match:
-                    matched_variant = v
-                    break
-            if matched_variant:
-                break
+        def score_variant(v: Dict[str, str]) -> Tuple[int, int, int]:
+            v_text = v["text"]
+            v_type = v["type"]
 
-        if not matched_variant:
-            matched_variant = variants[0]
+            # 1. Arch score (0 = exact/universal match, 1 = bundle fallback, 2 = other arch, 99 = no match)
+            arch_score = 99
+            if target_arch in ("universal", ""):
+                if any(x in v_text for x in ("universal", "noarch", "arm64-v8a + armeabi-v7a", "arm64-v8a + arm-v7a")):
+                    arch_score = 0
+                elif v_type == "BUNDLE":
+                    arch_score = 1
+                elif any(a in v_text for a in ("arm64-v8a", "armeabi-v7a", "arm-v7a")):
+                    arch_score = 2
+            elif target_arch == "all":
+                arch_score = 0
+            elif target_arch in ("armeabi-v7a", "arm-v7a"):
+                if "armeabi-v7a" in v_text or "arm-v7a" in v_text:
+                    arch_score = 0
+                elif v_type == "BUNDLE":
+                    arch_score = 1
+            elif target_arch in v_text:
+                arch_score = 0
+            elif v_type == "BUNDLE":
+                arch_score = 1
+
+            # 2. DPI score (nodpi > 120-480dpi > 120-640dpi > any range dpi > anydpi > other)
+            dpi_score = 99
+            if target_dpi and target_dpi in v_text:
+                dpi_score = 0
+            elif "nodpi" in v_text:
+                dpi_score = 0 if target_dpi == "nodpi" else 1
+            elif "120-480dpi" in v_text:
+                dpi_score = 2
+            elif "120-640dpi" in v_text:
+                dpi_score = 3
+            elif re.search(r'\d+-\d+dpi', v_text):
+                dpi_score = 4
+            elif "anydpi" in v_text or "any" in v_text:
+                dpi_score = 5
+            else:
+                dpi_score = 6
+
+            # 3. Type score: APK (0) preferred over BUNDLE (1)
+            type_score = 0 if v_type == "APK" else 1
+
+            return (arch_score, dpi_score, type_score)
+
+        sorted_variants = sorted(variants, key=score_variant)
+        matched_variant = sorted_variants[0] if sorted_variants else variants[0]
 
         is_bundle = (matched_variant["type"] == "BUNDLE")
         ext = ".apkm" if is_bundle else ".apk"

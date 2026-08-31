@@ -61,11 +61,17 @@ class IADownloader(BaseDownloader):
         clean_url = url.rstrip("/")
         file_links = self._extract_links(html)
 
-        target_arch = arch.replace(" ", "").lower()
+        target_arch = (arch or "universal").replace(" ", "").lower()
         matched_file = None
 
-        arch_candidates = [target_arch] if target_arch not in ("all", "") else []
-        arch_candidates.extend(["all", "universal"])
+        if target_arch in ("universal", ""):
+            arch_candidates = ["universal", "all", "noarch"]
+        elif target_arch == "all":
+            arch_candidates = ["all", "universal", "arm64-v8a", "armeabi-v7a", "arm-v7a", "x86_64", "x86"]
+        elif target_arch in ("armeabi-v7a", "arm-v7a"):
+            arch_candidates = ["armeabi-v7a", "arm-v7a", "universal", "all"]
+        else:
+            arch_candidates = [target_arch, "universal", "all"]
 
         for cand in arch_candidates:
             pattern = re.compile(rf"-{re.escape(version)}-{re.escape(cand)}\.(apk|apkm)$", re.IGNORECASE)
