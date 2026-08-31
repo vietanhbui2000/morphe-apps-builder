@@ -99,7 +99,7 @@ default_patches_source = "MorpheApp/morphe-patches"
 enabled = true
 id = "com.google.android.youtube"
 version = "auto"                         # "auto" (highest compatible), "latest", or pinned (e.g. "21.34.243")
-arch = ["all"]                           # ["all"] for universal APK, or ["arm64-v8a", "armeabi-v7a"] for split APKs
+arch = ["universal"]                     # ["universal"] for universal APK, or ["arm64-v8a", "armeabi-v7a"] for split APKs
 apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
 uptodown_url = "https://youtube.en.uptodown.com/android"
 apkpure_url = "https://apkpure.com/youtube-app/com.google.android.youtube"
@@ -146,6 +146,7 @@ morphe-apps-builder/
 │   └── models.py               # Data structures (GeneralConfig, AppConfig, BuildResult)
 │
 ├── downloaders/                # Downloader provider implementations (by fallback priority)
+│   ├── __init__.py             # Downloader registry & fallback dispatcher
 │   ├── base.py                 # Abstract BaseDownloader interface
 │   ├── aurorastore.py          # Aurora Store / Google Play downloader
 │   ├── aurorastore_pb2.py      # Protobuf definitions for Google Play checkin

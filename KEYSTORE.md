@@ -19,7 +19,7 @@ These values are configured under `[general]` in [`config.toml`](config.toml):
 
 ```toml
 [general]
-keystore_file = "keystore.keystore"
+keystore = "keystore.keystore"
 keystore_alias = "vietanhbui2000"
 keystore_password = "1234567890"
 ```
@@ -74,7 +74,7 @@ To use your own release signing key:
 2. Update [`config.toml`](config.toml):
    ```toml
    [general]
-   keystore_file = "my-release-key.keystore"
+   keystore = "my-release-key.keystore"
    keystore_alias = "mykey"
    keystore_password = "mypassword"
    ```
