@@ -285,7 +285,7 @@ class APKMirrorDownloader(BaseDownloader):
 
         is_bundle = (matched_variant["type"] == "BUNDLE")
         ext = ".apkm" if is_bundle else ".apk"
-        dest_path = output_path.with_suffix(ext)
+        dest_path = output_path.parent / f"{output_path.name}{ext}"
 
         log_info(f"[APKMirror] Fetching variant download page ({matched_variant['type']})...", indent=2)
         v_html = http_client.get_html(matched_variant["href"])

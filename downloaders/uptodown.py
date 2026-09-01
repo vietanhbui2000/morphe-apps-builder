@@ -175,7 +175,7 @@ class UptodownDownloader(BaseDownloader):
             final_dl_url = f"https://dw.uptodown.com/dwn/{data_url}"
 
         ext = ".xapk" if is_bundle else ".apk"
-        dest_path = output_path.with_suffix(ext)
+        dest_path = output_path.parent / f"{output_path.name}{ext}"
 
         log_info(f"[Uptodown] Downloading payload to {dest_path.name}...", indent=2)
         if http_client.download_file(final_dl_url, dest_path, referer=detail_url):

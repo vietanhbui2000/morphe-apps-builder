@@ -505,7 +505,7 @@ class AuroraStoreDownloader(BaseDownloader):
             # 9. Download payload
             if splits:
                 log_info(f"[AuroraStore] Split APK detected ({len(splits)} splits). Downloading bundle...", indent=2)
-                dest_bundle_path = output_path.with_suffix(".apkm")
+                dest_bundle_path = output_path.parent / f"{output_path.name}.apkm"
                 with tempfile.TemporaryDirectory() as tmp_dir:
                     tmp_p = Path(tmp_dir)
                     base_f = tmp_p / "base.apk"
@@ -527,7 +527,7 @@ class AuroraStoreDownloader(BaseDownloader):
                 log_info(f"[AuroraStore] Saved split bundle to {dest_bundle_path.name}", indent=2)
                 return dest_bundle_path
             else:
-                dest_apk_path = output_path.with_suffix(".apk")
+                dest_apk_path = output_path.parent / f"{output_path.name}.apk"
                 log_info(f"[AuroraStore] Downloading standalone APK to {dest_apk_path.name}...", indent=2)
                 r = session.get(download_url, stream=True, timeout=120)
                 r.raise_for_status()

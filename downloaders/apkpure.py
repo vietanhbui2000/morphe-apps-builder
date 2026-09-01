@@ -94,7 +94,7 @@ class APKPureDownloader(BaseDownloader):
 
         is_bundle = "xapk" in dl_url.lower() or "xapk" in html.lower()
         ext = ".xapk" if is_bundle else ".apk"
-        dest_path = output_path.with_suffix(ext)
+        dest_path = output_path.parent / f"{output_path.name}{ext}"
 
         log_info(f"[APKPure] Downloading payload to {dest_path.name}...", indent=2)
         if http_client.download_file(dl_url, dest_path, referer=dl_page_url):
