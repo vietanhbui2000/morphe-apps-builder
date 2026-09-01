@@ -3,10 +3,8 @@
 APK manipulation utilities: APKEditor bundle merger, architecture stripping, and apksigner.
 """
 
-import os
 import shutil
 import subprocess
-import tempfile
 import zipfile
 from pathlib import Path
 from typing import Optional

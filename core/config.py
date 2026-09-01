@@ -3,7 +3,6 @@
 Configuration loader and validator for config.toml using native tomllib.
 """
 
-import re
 import sys
 from pathlib import Path
 from typing import Any, Tuple
