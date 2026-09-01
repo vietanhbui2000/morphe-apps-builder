@@ -655,10 +655,12 @@ def write_patch_summary(results: List[BuildResult]) -> int:
 
         for line in apps_part.splitlines():
             line_s = line.strip()
-            if not line_s or line_s.startswith("ℹ"):
+            if not line_s or line_s.startswith(("#", "ℹ", "└")):
                 continue
             if ":" in line_s:
                 app_key = line_s.split(":", 1)[0].strip()
+                if "(" in app_key or "[" in app_key or "└" in app_key:
+                    continue
                 existing_apps[app_key] = line_s + "  "
 
         for line in sources_part.splitlines():
