@@ -57,14 +57,17 @@ class GitHubClient:
                 return data
             releases = self._get_json(api_url)
             if releases and isinstance(releases, list):
-                return releases[0]
-        elif tag in ("prerelease", "dev"):
-            releases = self._get_json(api_url)
-            if releases and isinstance(releases, list):
                 for rel in releases:
-                    if rel.get("prerelease") or "-dev" in rel.get("tag_name", ""):
+                    if not rel.get("prerelease") and not rel.get("draft"):
                         return rel
                 return releases[0]
+        elif tag == "beta":
+            releases = self._get_json(api_url)
+            if releases and isinstance(releases, list):
+                return releases[0]
+            data = self._get_json(f"{api_url}/latest")
+            if data:
+                return data
         else:
             data = self._get_json(f"{api_url}/tags/{tag}")
             if data:
