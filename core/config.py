@@ -63,18 +63,13 @@ def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:
         if section_name == "general" or not isinstance(section_data, dict):
             continue
 
-        curr_name = section_name
-        curr_data = section_data
-        while isinstance(curr_data, dict) and "id" not in curr_data and len(curr_data) == 1:
-            nested_k, nested_v = next(iter(curr_data.items()))
+        while isinstance(section_data, dict) and "id" not in section_data and len(section_data) == 1:
+            nested_k, nested_v = next(iter(section_data.items()))
             if isinstance(nested_v, dict):
-                curr_name = f"{curr_name}.{nested_k}"
-                curr_data = nested_v
+                section_name = f"{section_name}.{nested_k}"
+                section_data = nested_v
             else:
                 break
-
-        section_name = curr_name
-        section_data = curr_data
 
         enabled = section_data.get("enabled", True)
         app_id = section_data.get("id", "")
