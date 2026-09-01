@@ -121,14 +121,14 @@ jobs:
 
       - name: Prune Old Releases & Orphaned Tags
         run: |
-          echo "Cleaning older releases (keeping 9 most recent)..."
+          echo "Cleaning older releases (keeping 10 most recent)..."
           ALL_TAGS=$(gh release list --limit 100 --json tagName -q '.[].tagName')
           TOTAL=$(echo "$ALL_TAGS" | grep -v '^$' | wc -l | tr -d ' ')
-          if [ "$TOTAL" -gt 9 ]; then
-            echo "$ALL_TAGS" | tail -n +10 | while read -r old_tag; do
+          if [ "$TOTAL" -gt 10 ]; then
+            echo "$ALL_TAGS" | tail -n +11 | while read -r old_tag; do
               [ -n "$old_tag" ] || continue
               echo "Deleting old release: $old_tag"
-              gh release delete "$old_tag" --yes || true
+              gh release delete "$old_tag" --yes --cleanup-tag || gh release delete "$old_tag" --yes || true
             done
           fi
 
