@@ -61,7 +61,7 @@ The section header (`[YouTube]`, `[YouTube-Music]`, etc.) directly defines the a
 | `enabled` | `boolean` | `true` | Set to `false` to temporarily skip building this app. |
 | `id` | `string` | **Required** | The Android application package identifier (e.g. `com.google.android.youtube`). Used by Morphe CLI to query compatible versions and filter patches. |
 | `version` | `string` | `"auto"` | Target version strategy:<br>• `"auto"`: Automatically queries the patch bundle and resolves the highest supported version.<br>• `"latest"`: Downloads the latest upstream version from downloaders.<br>• `"X.Y.Z"`: Pins an exact version (e.g. `"21.18.168"`). |
-| `arch` | `list[string]` | `["universal"]` | Target architectures to build. Supported values:<br>• `["universal"]`: Builds a single universal APK.<br>• `["all"]`: Dynamically builds universal APK plus individual APKs for all detected architectures.<br>• `["arm64-v8a", "armeabi-v7a"]`: Builds individual APKs for specified architectures.<br>• `["x86_64"]`, `["x86"]`. |
+| `arch` | `list[string]` | `["universal"]` | Target architectures to build. Supported values:<br>• `["universal"]`: Downloads and builds a single universal APK.<br>• `["all"]`: Discovers, downloads, and builds all available architecture packages published for that version.<br>• `["arm64-v8a", "armeabi-v7a"]`: Downloads and builds APKs for specified architectures.<br>• `["x86_64"]`, `["x86"]`. |
 | `dpi` | `string` | `""` | Optional DPI selector for APKMirror (e.g. `"nodpi"`, `"anydpi"`, `"120-640dpi"`). |
 
 ### Download Sources (Fallback Chain)

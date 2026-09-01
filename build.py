@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.apk import merge_bundle, strip_architectures, sign_apk, ensure_apk_editor, ensure_keystore, get_apk_architectures
+from core.apk import merge_bundle, sign_apk, ensure_apk_editor, ensure_keystore
 from core.config import load_config
 from core.github import github_client
 from core.logger import (
@@ -196,65 +196,29 @@ def resolve_app_version(
     return None
 
 
-def download_single_target(
+def download_app_targets(
     app: AppConfig,
-    arch: str,
+    resolved_version: str,
     cli_tag: str,
     cli_path: Path,
     patches_tag: str,
     patches_path: Path,
     dry_run: bool = False
-) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+) -> Tuple[List[Dict[str, Any]], List[BuildResult]]:
     """
-    Download phase for an architecture target or dynamic multi-architecture expansion ('all').
-    Returns (list_of_target_info_dicts, error_message).
+    Download phase for an app given its pre-resolved version and configured architectures.
+    Looks for compatible packages matching app.arch (universal, specific archs, or all).
+    If a fat package is downloaded when specific archs are configured, it will be reused
+    for extracting only what was asked.
+    Returns (list_of_targets, list_of_failures).
     """
-    log_stage(f"Downloading {app.name} ({arch})")
+    targets: List[Dict[str, Any]] = []
+    failures: List[BuildResult] = []
 
-    resolved_version = resolve_app_version(app, cli_path, patches_path, dry_run=dry_run)
-    if not resolved_version:
-        return [], "Could not resolve version for app"
-
-    if dry_run:
-        log_info(f"[DRY-RUN] Would download {app.name} v{resolved_version} ({arch})", indent=1)
-        downloaded_file = APKS_DIR / f"{app.id}_{resolved_version}_{arch}.apk"
-    else:
-        sources = get_download_sources_for_app(app)
-        if not sources:
-            return [], "No download sources configured in config.toml"
-
-        APKS_DIR.mkdir(parents=True, exist_ok=True)
-        stock_apk_base = APKS_DIR / f"{app.id}_{resolved_version}_{arch}"
-        downloaded_file: Optional[Path] = None
-
-        download_arch_query = "universal" if arch == "all" else arch
-        for provider_name, downloader, src_url in sources:
-            log_info(f"Attempting download via {provider_name}...", indent=1)
-            try:
-                downloaded_file = downloader.download(
-                    url=src_url,
-                    version=resolved_version,
-                    arch=download_arch_query,
-                    dpi=app.dpi,
-                    output_path=stock_apk_base,
-                    app_id=app.id
-                )
-                if downloaded_file and downloaded_file.is_file() and downloaded_file.stat().st_size > 0:
-                    log_success(f"Downloaded {downloaded_file.name} via {provider_name}", indent=1)
-                    break
-                else:
-                    log_warn(f"Provider {provider_name} returned no file, trying next...", indent=1)
-            except Exception as e:
-                log_warn(f"Provider {provider_name} failed: {e}", indent=1)
-
-        if not downloaded_file or not downloaded_file.is_file():
-            return [], "All download providers failed"
-
-    target_info = {
+    target_info_base = {
         "name": app.name,
         "id": app.id,
         "version": resolved_version,
-        "stock_apk_path": str(downloaded_file),
         "cli_source": app.cli_source,
         "cli_version": app.cli_version,
         "cli_tag": cli_tag,
@@ -265,24 +229,119 @@ def download_single_target(
         "patches_path": str(patches_path),
     }
 
-    if arch == "all":
-        if dry_run:
-            return [
-                {**target_info, "arch": "universal", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_universal.apk")},
-                {**target_info, "arch": "arm64-v8a", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_arm64-v8a.apk")},
-                {**target_info, "arch": "armeabi-v7a", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_armeabi-v7a.apk")},
-            ], None
-        # Inspect native ABIs inside the downloaded APK / bundle
-        detected_abis = get_apk_architectures(downloaded_file)
-        if detected_abis:
-            targets = [{**target_info, "arch": "universal"}]
-            for abi in detected_abis:
-                targets.append({**target_info, "arch": abi})
-            log_success(f"Detected architectures: universal, {', '.join(detected_abis)}", indent=1)
-            return targets, None
-        return [{**target_info, "arch": "universal"}], None
+    if dry_run:
+        if app.arch == ["all"]:
+            for a in ("universal", "arm64-v8a", "armeabi-v7a"):
+                log_info(f"[DRY-RUN] Would download {app.name} v{resolved_version} ({a})", indent=1)
+                targets.append({
+                    **target_info_base,
+                    "arch": a,
+                    "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_{a}.apk")
+                })
+        else:
+            for a in app.arch:
+                log_info(f"[DRY-RUN] Would download {app.name} v{resolved_version} ({a})", indent=1)
+                targets.append({
+                    **target_info_base,
+                    "arch": a,
+                    "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_{a}.apk")
+                })
+        return targets, failures
 
-    return [{**target_info, "arch": arch}], None
+    sources = get_download_sources_for_app(app)
+    if not sources:
+        for a in app.arch:
+            failures.append(BuildResult(
+                name=app.name, id=app.id, version=resolved_version, arch=a,
+                success=False, error_message="No download sources configured in config.toml",
+                cli_source=app.cli_source, cli_tag=cli_tag,
+                patches_source=app.patches_source, patches_tag=patches_tag
+            ))
+        return targets, failures
+
+    APKS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Track already downloaded packages for this app: {path: [abis]}
+    downloaded_packages: Dict[Path, List[str]] = {}
+
+    def _fetch_package(query_arch: str) -> Optional[Path]:
+        stock_apk_base = APKS_DIR / f"{app.id}_{resolved_version}_{query_arch}"
+        for provider_name, downloader, src_url in sources:
+            log_info(f"Attempting download via {provider_name}...", indent=1)
+            try:
+                downloaded = downloader.download(
+                    url=src_url,
+                    version=resolved_version,
+                    arch=query_arch,
+                    dpi=app.dpi,
+                    output_path=stock_apk_base,
+                    app_id=app.id
+                )
+                if downloaded and downloaded.is_file() and downloaded.stat().st_size > 0:
+                    log_success(f"Downloaded {downloaded.name} via {provider_name}", indent=1)
+                    return downloaded
+                else:
+                    log_warn(f"Provider {provider_name} returned no file, trying next...", indent=1)
+            except Exception as e:
+                log_warn(f"Provider {provider_name} failed: {e}", indent=1)
+        return None
+
+    if app.arch == ["all"]:
+        # 1. Discover all available architecture packages for this app version from sources
+        available_archs: List[str] = []
+        for provider_name, downloader, src_url in sources:
+            archs = downloader.get_available_architectures(src_url, resolved_version)
+            if archs:
+                available_archs = archs
+                log_info(f"Discovered available architecture packages via {provider_name}: {', '.join(archs)}", indent=1)
+                break
+
+        # Fallback if source does not expose an architecture catalog: attempt universal
+        if not available_archs:
+            available_archs = ["universal"]
+
+        # 2. Download and register a target for EVERY available architecture package
+        for arch in available_archs:
+            safe_arch = arch.replace(" ", "")
+            log_stage(f"Downloading {app.name} ({safe_arch})")
+            downloaded = _fetch_package(safe_arch)
+            if not downloaded:
+                failures.append(BuildResult(
+                    name=app.name, id=app.id, version=resolved_version, arch=safe_arch,
+                    success=False, error_message=f"Failed to download package for {safe_arch}",
+                    cli_source=app.cli_source, cli_tag=cli_tag,
+                    patches_source=app.patches_source, patches_tag=patches_tag
+                ))
+                continue
+
+            targets.append({
+                **target_info_base,
+                "arch": safe_arch,
+                "stock_apk_path": str(downloaded)
+            })
+
+        return targets, failures
+
+    # Specific configured architectures (e.g. ["universal"] or ["arm64-v8a", "armeabi-v7a"])
+    for arch in app.arch:
+        log_stage(f"Downloading {app.name} ({arch})")
+        downloaded = _fetch_package(arch)
+        if not downloaded:
+            failures.append(BuildResult(
+                name=app.name, id=app.id, version=resolved_version, arch=arch,
+                success=False, error_message=f"Architecture '{arch}' not found on download providers",
+                cli_source=app.cli_source, cli_tag=cli_tag,
+                patches_source=app.patches_source, patches_tag=patches_tag
+            ))
+            continue
+
+        targets.append({
+            **target_info_base,
+            "arch": arch,
+            "stock_apk_path": str(downloaded)
+        })
+
+    return targets, failures
 
 
 def patch_single_target(
@@ -400,13 +459,7 @@ def patch_single_target(
             patches_tag=patches_tag,
         )
 
-    # 3. Native Architecture Stripping & Signing
-    if arch not in ("all", "universal", ""):
-        log_info(f"Filtering native libraries for {arch}...", indent=1)
-        stripped_apk_path = TEMP_DIR / f"stripped_{final_apk_name}"
-        if strip_architectures(temp_patched_path, arch, stripped_apk_path):
-            temp_patched_path = stripped_apk_path
-
+    # 3. Signing
     log_info("Signing release APK...", indent=1)
     if not sign_apk(
         apk_path=temp_patched_path,
@@ -803,31 +856,36 @@ def main() -> int:
                     ))
                 continue
 
-            for arch in app.arch:
-                targets_list, err = download_single_target(
-                    app=app,
-                    arch=arch,
-                    cli_tag=cli_tag,
-                    cli_path=cli_path,
-                    patches_tag=patches_tag,
-                    patches_path=patches_path,
-                    dry_run=args.dry_run
-                )
-                if targets_list:
-                    download_targets.extend(targets_list)
-                else:
+            resolved_version = resolve_app_version(app, cli_path, patches_path, dry_run=args.dry_run)
+            if not resolved_version:
+                log_error(f"Could not resolve version for {app.name}", indent=1)
+                group_end()
+                for arch in app.arch:
                     failed_downloads.append(BuildResult(
                         name=app.name,
                         id=app.id,
                         version="unknown",
                         arch=arch,
                         success=False,
-                        error_message=err or "Download failed",
+                        error_message="Could not resolve version for app",
                         cli_source=app.cli_source,
                         cli_tag=cli_tag,
                         patches_source=app.patches_source,
                         patches_tag=patches_tag,
                     ))
+                continue
+
+            app_targets, app_failures = download_app_targets(
+                app=app,
+                resolved_version=resolved_version,
+                cli_tag=cli_tag,
+                cli_path=cli_path,
+                patches_tag=patches_tag,
+                patches_path=patches_path,
+                dry_run=args.dry_run
+            )
+            download_targets.extend(app_targets)
+            failed_downloads.extend(app_failures)
 
             group_end()
 
