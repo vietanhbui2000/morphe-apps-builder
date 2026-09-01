@@ -58,7 +58,7 @@ def _extract_source_tag_from_release_md(source: str, release_text: str) -> str:
     """Extract tag for a CLI or patches repository from previous RELEASE.md."""
     if not release_text:
         return ""
-    pattern = rf"{re.escape(source)}\s+\[?([a-zA-Z0-9._-]+)\]?"
+    pattern = rf"{re.escape(source)}[\s:]+\[?([a-zA-Z0-9._-]+)\]?"
     match = re.search(pattern, release_text)
     return match.group(1) if match else ""
 
@@ -107,7 +107,7 @@ def check_updates(config_path: Path) -> int:
 
     # Determine which apps need to be built
     apps_to_build: List[str] = []
-    app_summary_rows: List[Tuple[str, str, str, str, str, bool, bool]] = []
+    app_summary_rows: List[Tuple[str, str]] = []
 
     for app in enabled_apps:
         cli_cur = source_current_tags.get(app.cli_source, "")
@@ -120,7 +120,14 @@ def check_updates(config_path: Path) -> int:
 
         if cli_up or pat_up or not prev_release_text:
             apps_to_build.append(app.name)
-            app_summary_rows.append((app.name, app.cli_source, cli_lat or cli_cur, app.patches_source, pat_lat or pat_cur, cli_up, pat_up))
+            reasons = []
+            if cli_up:
+                reasons.append(f"{app.cli_source} {cli_lat or cli_cur}")
+            if pat_up:
+                reasons.append(f"{app.patches_source} {pat_lat or pat_cur}")
+            if not reasons:
+                reasons.append(f"{app.cli_source} {cli_lat or cli_cur} + {app.patches_source} {pat_lat or pat_cur}")
+            app_summary_rows.append((app.name, " + ".join(reasons)))
 
     print("=" * 70)
     print(f"{Colors.BOLD}CHECK SUMMARY{Colors.RESET}")
@@ -137,12 +144,9 @@ def check_updates(config_path: Path) -> int:
                 print(f"{source}: {lat or cur or 'unknown'}")
 
         print("> Apps")
-        for app_name, cli_src, cli_tag, pat_src, pat_tag, cli_up, pat_up in app_summary_rows:
+        for app_name, reason_str in app_summary_rows:
             icon = f"{Colors.YELLOW}[~]{Colors.RESET}"
-            cli_marker = "⌃" if cli_up else ""
-            pat_marker = "⌃" if pat_up else ""
-            print(f"{icon} {app_name}: TO BUILD")
-            print(f"└ {cli_src} {cli_tag}{cli_marker} + {pat_src} {pat_tag}{pat_marker}")
+            print(f"{icon} {app_name}: [{reason_str}] > TO BUILD")
 
         print("SHOULD_BUILD=1")
         print(f"APPS_TO_BUILD={','.join(apps_to_build)}")
@@ -220,13 +224,13 @@ def download_single_target(
             "patches_version": app.patches_version,
             "patches_tag": patches_tag,
             "patches_path": str(patches_path),
-            "stock_apk_path": "",
+            "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_{arch}.apk"),
         }
         if arch == "all":
             return [
-                {**target_info, "arch": "universal"},
-                {**target_info, "arch": "arm64-v8a"},
-                {**target_info, "arch": "armeabi-v7a"},
+                {**target_info, "arch": "universal", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_universal.apk")},
+                {**target_info, "arch": "arm64-v8a", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_arm64-v8a.apk")},
+                {**target_info, "arch": "armeabi-v7a", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_armeabi-v7a.apk")},
             ], None
         return [{**target_info, "arch": arch}], None
 
@@ -478,6 +482,17 @@ def _get_github_repo() -> str:
     return repo
 
 
+def _get_target_stock_apk_name(t: Dict[str, Any]) -> str:
+    """Return filename of downloaded stock APK, falling back to package id pattern."""
+    path_str = t.get("stock_apk_path")
+    if path_str:
+        return Path(path_str).name
+    app_id = t.get("id") or t.get("name") or "unknown"
+    version = t.get("version") or "unknown"
+    arch = t.get("arch") or "universal"
+    return f"{app_id}_{version}_{arch}.apk"
+
+
 def write_download_summary(
     download_targets: List[Dict[str, Any]],
     failed_downloads: List[BuildResult]
@@ -516,33 +531,25 @@ def write_download_summary(
         if app_targets and not app_failures:
             icon = f"{Colors.GREEN}[✓]{Colors.RESET}"
             if is_multi:
-                parts = [
-                    f"{version} ({t.get('arch')}) > {Path(t['stock_apk_path']).name if t.get('stock_apk_path') else f'{t.get('name')}_{t.get('version')}_{t.get('arch')}.apk'}"
-                    for t in app_targets
-                ]
-                print(f"{icon} {name}: {', '.join(parts)}")
+                parts = [f"({t.get('arch')}) {_get_target_stock_apk_name(t)}" for t in app_targets]
+                print(f"{icon} {name}: {version} > {'; '.join(parts)}")
             else:
-                t = app_targets[0]
-                apk_name = Path(t["stock_apk_path"]).name if t.get("stock_apk_path") else f"{t.get('name')}_{t.get('version')}_{t.get('arch')}.apk"
-                print(f"{icon} {name}: {version} > {apk_name}")
+                print(f"{icon} {name}: {version} > {_get_target_stock_apk_name(app_targets[0])}")
         elif app_targets and app_failures:
             icon = f"{Colors.YELLOW}[▲]{Colors.RESET}"
-            parts = [
-                f"{version} ({t.get('arch')}) > {Path(t['stock_apk_path']).name if t.get('stock_apk_path') else f'{t.get('name')}_{t.get('version')}_{t.get('arch')}.apk'}"
-                for t in app_targets
-            ]
+            parts = [f"({t.get('arch')}) {_get_target_stock_apk_name(t)}" for t in app_targets]
             for f in app_failures:
                 err = f.error_message or "Download failed"
-                parts.append(f"{version} ({f.arch}) > FAILED ~ {err}")
-            print(f"{icon} {name}: {', '.join(parts)}")
+                parts.append(f"({f.arch}) FAILED {{{err}}}")
+            print(f"{icon} {name}: {version} > {'; '.join(parts)}")
         else:
             icon = f"{Colors.RED}[✗]{Colors.RESET}"
             if is_multi:
-                parts = [f"{version} ({f.arch}) > FAILED ~ {f.error_message or 'Download failed'}" for f in app_failures]
-                print(f"{icon} {name}: {', '.join(parts)}")
+                parts = [f"({f.arch}) FAILED {{{f.error_message or 'Download failed'}}}" for f in app_failures]
+                print(f"{icon} {name}: {version} > {'; '.join(parts)}")
             else:
                 err = app_failures[0].error_message if app_failures else "Download failed"
-                print(f"{icon} {name}: {version} > FAILED ~ {err}")
+                print(f"{icon} {name}: {version} > FAILED {{{err}}}")
 
     if download_targets:
         save_manifest(download_targets)
@@ -570,48 +577,48 @@ def write_patch_summary(results: List[BuildResult]) -> int:
         v_raw = first_r.version
         version = f"v{v_raw}" if v_raw and not v_raw.startswith("v") else (v_raw or "vauto")
 
+        cli_tag = first_r.cli_tag or "latest"
+        patches_tag = first_r.patches_tag or "latest"
+        recipe_str = f"{first_r.cli_source} {cli_tag} + {first_r.patches_source} {patches_tag}"
+
         if all_success:
             icon = f"{Colors.GREEN}[✓]{Colors.RESET}"
             if is_multi:
                 parts = [
-                    f"{version} ({r.arch}) > {r.output_path.name if r.output_path else f'{r.name}_{version}_{r.arch}.apk'}"
+                    f"({r.arch}) {r.output_path.name if r.output_path else f'{r.name}_{version}_{r.arch}.apk'}"
                     for r in app_results
                 ]
-                print(f"{icon} {name}: {', '.join(parts)}")
+                print(f"{icon} {name}: {version} [{recipe_str}] > {'; '.join(parts)}")
             else:
                 apk_name = first_r.output_path.name if first_r.output_path else f"{first_r.name}_{version}.apk"
-                print(f"{icon} {name}: {version} > {apk_name}")
+                print(f"{icon} {name}: {version} [{recipe_str}] > {apk_name}")
         elif any_success:
             icon = f"{Colors.YELLOW}[▲]{Colors.RESET}"
             parts = []
             for r in app_results:
                 if r.success and r.output_path:
-                    parts.append(f"{version} ({r.arch}) > {r.output_path.name}")
+                    parts.append(f"({r.arch}) {r.output_path.name}")
                 else:
                     err = r.error_message or "Patching failed"
-                    parts.append(f"{version} ({r.arch}) > FAILED ~ {err}")
-            print(f"{icon} {name}: {', '.join(parts)}")
+                    parts.append(f"({r.arch}) FAILED {{{err}}}")
+            print(f"{icon} {name}: {version} [{recipe_str}] > {'; '.join(parts)}")
         else:
             icon = f"{Colors.RED}[✗]{Colors.RESET}"
             if is_multi:
-                parts = [f"{version} ({r.arch}) > FAILED ~ {r.error_message or 'Patching failed'}" for r in app_results]
-                print(f"{icon} {name}: {', '.join(parts)}")
+                parts = [f"({r.arch}) FAILED {{{r.error_message or 'Patching failed'}}}" for r in app_results]
+                print(f"{icon} {name}: {version} [{recipe_str}] > {'; '.join(parts)}")
             else:
                 err = first_r.error_message or "Patching failed"
-                print(f"{icon} {name}: {version} > FAILED ~ {err}")
-
-        cli_tag = first_r.cli_tag or "latest"
-        patches_tag = first_r.patches_tag or "latest"
-        print(f"└ {first_r.cli_source} {cli_tag} + {first_r.patches_source} {patches_tag}")
+                print(f"{icon} {name}: {version} [{recipe_str}] > FAILED {{{err}}}")
 
     # Write RELEASE.md for GitHub Releases
     release_md = ROOT_DIR / "RELEASE.md"
-    sections = []
-
     repo = _get_github_repo()
     release_tag = os.environ.get("RELEASE_TAG", "").strip()
 
-    new_app_blocks: Dict[str, str] = {}
+    new_app_lines: Dict[str, str] = {}
+    new_source_lines: Dict[str, str] = {}
+
     for name, app_results in grouped.items():
         success_results = [r for r in app_results if r.success]
         if not success_results:
@@ -634,33 +641,59 @@ def write_patch_summary(results: List[BuildResult]) -> int:
             else:
                 target_links.append(label)
 
-        targets_str = " | ".join(target_links)
-        header = f"{name}: {targets_str}  "
+        targets_str = "; ".join(target_links)
+        patches_tag = first_r.patches_tag or "latest"
+        cli_tag = first_r.cli_tag or "latest"
 
-        cli_link = f"[{first_r.cli_tag}](https://github.com/{first_r.cli_source}/releases/tag/{first_r.cli_tag})" if first_r.cli_tag else ""
-        cli_str = f"{first_r.cli_source} {cli_link}".strip()
+        # App line format: AppName: [vX.Y.Z](link) [`patches_source patches_tag`]  
+        new_app_lines[name] = f"{name}: {targets_str} [`{first_r.patches_source} {patches_tag}`]  "
 
-        patches_link = f"[{first_r.patches_tag}](https://github.com/{first_r.patches_source}/releases/tag/{first_r.patches_tag})" if first_r.patches_tag else ""
-        patches_str = f"{first_r.patches_source} {patches_link}".strip()
+        # Track sources for bottom section
+        cli_url = f"https://github.com/{first_r.cli_source}/releases/tag/{cli_tag}"
+        new_source_lines[first_r.cli_source] = f"{first_r.cli_source}: [{cli_tag}]({cli_url})  "
 
-        sub = f"└ {cli_str} + {patches_str}"
-        new_app_blocks[name] = f"{header}\n{sub}"
+        pat_url = f"https://github.com/{first_r.patches_source}/releases/tag/{patches_tag}"
+        new_source_lines[first_r.patches_source] = f"{first_r.patches_source}: [{patches_tag}]({pat_url})  "
 
-    final_blocks_dict: Dict[str, str] = {}
+    existing_apps: Dict[str, str] = {}
+    existing_sources: Dict[str, str] = {}
+
     if release_md.is_file():
         prev_content = release_md.read_text(encoding="utf-8")
-        for chunk in prev_content.split("\n\n"):
-            chunk_s = chunk.strip()
-            if ":" in chunk_s and "└" in chunk_s:
-                app_key = chunk_s.split(":", 1)[0].strip()
-                final_blocks_dict[app_key] = chunk_s
+        if "---" in prev_content:
+            apps_part, sources_part = prev_content.split("---", 1)
+        else:
+            apps_part = prev_content
+            sources_part = ""
 
-    final_blocks_dict.update(new_app_blocks)
+        for line in apps_part.splitlines():
+            line_s = line.strip()
+            if not line_s or line_s.startswith("ℹ"):
+                continue
+            if ":" in line_s:
+                app_key = line_s.split(":", 1)[0].strip()
+                existing_apps[app_key] = line_s + "  "
+
+        for line in sources_part.splitlines():
+            line_s = line.strip()
+            if not line_s:
+                continue
+            if ":" in line_s:
+                source_key = line_s.split(":", 1)[0].strip()
+                existing_sources[source_key] = line_s + "  "
+
+    existing_apps.update(new_app_lines)
+    existing_sources.update(new_source_lines)
 
     sections = []
-    if final_blocks_dict:
-        sections.append("\n\n".join(final_blocks_dict.values()))
+    if existing_apps:
+        app_lines_str = "\n".join(existing_apps.values())
+        sections.append(app_lines_str)
         sections.append("ℹ Install [MicroG ↗](https://github.com/MorpheApp/MicroG-RE/) to enable Google account authentication and services for Morphe apps.")
+
+    if existing_sources:
+        source_lines_str = "\n".join(existing_sources.values())
+        sections.append(f"---\n\n{source_lines_str}")
 
     release_md.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
     log_success(f"Wrote release notes to {release_md.name}")
