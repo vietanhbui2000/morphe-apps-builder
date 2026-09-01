@@ -161,6 +161,63 @@ class APKMirrorDownloader(BaseDownloader):
 
         return None
 
+    def get_available_architectures(self, url: str, version: str) -> list[str]:
+        version_page_url = self._find_version_page(url, version)
+        if not version_page_url:
+            return []
+
+        html = http_client.get_html(version_page_url)
+        if not html:
+            return []
+
+        arch_set = []
+
+        def _add_arch(a: str):
+            if a and a not in arch_set:
+                arch_set.append(a)
+
+        if HAS_BS4:
+            soup = BeautifulSoup(html, "html.parser")
+            for row in soup.select("div.table-row"):
+                badge = row.select_one("span.apkm-badge")
+                link = row.select_one("a.accent_color")
+                if not badge or not link:
+                    continue
+                cells = [c.get_text(strip=True) for c in row.select("div.table-cell")]
+                row_text = " ".join(cells).lower()
+
+                if any(x in row_text for x in ("arm64-v8a + armeabi-v7a", "arm64-v8a + arm-v7a", "arm64_v8a + armeabi_v7a")):
+                    _add_arch("arm64-v8a+armeabi-v7a")
+                elif "arm64-v8a" in row_text or "arm64" in row_text:
+                    _add_arch("arm64-v8a")
+                elif "armeabi-v7a" in row_text or "arm-v7a" in row_text:
+                    _add_arch("armeabi-v7a")
+                elif "universal" in row_text or "noarch" in row_text:
+                    _add_arch("universal")
+                elif "x86_64" in row_text:
+                    _add_arch("x86_64")
+                elif "x86" in row_text:
+                    _add_arch("x86")
+        else:
+            rows = html.split('<div class="table-row')
+            for r in rows[1:]:
+                r_lower = r.lower()
+                if any(x in r_lower for x in ("arm64-v8a + armeabi-v7a", "arm64-v8a + arm-v7a")):
+                    _add_arch("arm64-v8a+armeabi-v7a")
+                elif "arm64-v8a" in r_lower or "arm64" in r_lower:
+                    _add_arch("arm64-v8a")
+                elif "armeabi-v7a" in r_lower or "arm-v7a" in r_lower:
+                    _add_arch("armeabi-v7a")
+                elif "universal" in r_lower or "noarch" in r_lower:
+                    _add_arch("universal")
+                elif "x86_64" in r_lower:
+                    _add_arch("x86_64")
+                elif "x86" in r_lower:
+                    _add_arch("x86")
+
+        order = ["universal", "arm64-v8a", "armeabi-v7a", "arm64-v8a+armeabi-v7a", "x86_64", "x86"]
+        return sorted(arch_set, key=lambda x: order.index(x) if x in order else 99)
+
     def download(
         self,
         url: str,
@@ -248,6 +305,11 @@ class APKMirrorDownloader(BaseDownloader):
                     arch_score = 2
             elif target_arch == "all":
                 arch_score = 0
+            elif target_arch in ("arm64-v8a+armeabi-v7a", "arm64-v8a + armeabi-v7a"):
+                if any(x in v_text for x in ("arm64-v8a + armeabi-v7a", "arm64-v8a + arm-v7a", "arm64_v8a + armeabi_v7a")):
+                    arch_score = 0
+                elif v_type == "BUNDLE":
+                    arch_score = 1
             elif target_arch in ("armeabi-v7a", "arm-v7a"):
                 if "armeabi-v7a" in v_text or "arm-v7a" in v_text:
                     arch_score = 0

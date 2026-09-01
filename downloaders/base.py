@@ -25,6 +25,10 @@ class BaseDownloader(ABC):
         """Fetch list of available versions for the given app URL/category."""
         pass
 
+    def get_available_architectures(self, url: str, version: str) -> list[str]:
+        """Fetch list of available architectures/packages for a given version, if supported."""
+        return []
+
     @abstractmethod
     def download(
         self,
@@ -40,3 +44,4 @@ class BaseDownloader(ABC):
         Returns the path to the downloaded file (.apk, .apkm, .xapk) if successful, None otherwise.
         """
         pass
+
