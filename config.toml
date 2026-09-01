@@ -3,7 +3,9 @@ keystore = "keystore.keystore"
 keystore_alias = "vietanhbui2000"
 keystore_password = "1234567890"
 default_cli_source = "MorpheApp/morphe-cli"
+default_cli_version = "latest"
 default_patches_source = "MorpheApp/morphe-patches"
+default_patches_version = "latest"
 
 [YouTube]
 enabled = true

@@ -52,14 +52,14 @@ default_patches_version = "latest"
 
 ## 3. App Settings (`[AppName]`)
 
-The section header (`[YouTube]`, `[YouTube-Music]`, etc.) directly defines the application's display name and output artifact base name (`output/{AppName}_v{version}_{arch}.apk`).
+The section header (`[YouTube]`, `[YouTube-Music]`, etc.) directly defines the application's display name and output artifact base name (`output/{AppName}_v{version}.apk` or `output/{AppName}_v{version}_{arch}.apk`).
 
 ### Core Properties
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `id` | `string` | **Required** | The Android application package identifier (e.g. `com.google.android.youtube`). Used by Morphe CLI to query compatible versions and filter patches. |
 | `enabled` | `boolean` | `true` | Set to `false` to temporarily skip building this app. |
+| `id` | `string` | **Required** | The Android application package identifier (e.g. `com.google.android.youtube`). Used by Morphe CLI to query compatible versions and filter patches. |
 | `version` | `string` | `"auto"` | Target version strategy:<br>• `"auto"`: Automatically queries the patch bundle and resolves the highest supported version.<br>• `"latest"`: Downloads the latest upstream version from downloaders.<br>• `"X.Y.Z"`: Pins an exact version (e.g. `"21.18.168"`). |
 | `arch` | `list[string]` | `["universal"]` | Target architectures to build. Supported values:<br>• `["universal"]`: Builds a single universal APK.<br>• `["all"]`: Dynamically builds universal APK plus individual APKs for all detected architectures.<br>• `["arm64-v8a", "armeabi-v7a"]`: Builds individual APKs for specified architectures.<br>• `["x86_64"]`, `["x86"]`. |
 | `dpi` | `string` | `""` | Optional DPI selector for APKMirror (e.g. `"nodpi"`, `"anydpi"`, `"120-640dpi"`). |
@@ -68,15 +68,15 @@ The section header (`[YouTube]`, `[YouTube-Music]`, etc.) directly defines the a
 
 The builder attempts downloaders in priority order based on which URLs are provided:
 
-| Key | Description |
-| :--- | :--- |
-| `aurorastore` | `boolean` (`true`/`false`). Primary provider. Downloads directly from Google Play via Aurora Store anonymous token dispenser. |
-| `aurorastore_url` | Custom Aurora Store token dispenser URL (defaults to `https://auroraoss.com/api/auth`). |
-| `apkmirror_url` | APKMirror category/app URL. Automatically handles bundle merging and Cloudflare challenges. |
-| `uptodown_url` | Uptodown app URL. Scrapes version history and resolves direct CDN links. |
-| `apkpure_url` | APKPure app URL. Downloads APK or `.xapk` bundles. |
-| `ia_url` | Internet Archive directory URL containing pre-uploaded stock APKs. |
-| `direct_url` | Direct download URL. Supports `{version}` and `{arch}` template variables. |
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `aurorastore` | `boolean` | `false` | Primary provider. Downloads directly from Google Play via Aurora Store anonymous token dispenser. |
+| `aurorastore_url` | `string` | `""` | Custom Aurora Store token dispenser URL (defaults to `https://auroraoss.com/api/auth`). |
+| `apkmirror_url` | `string` | `""` | APKMirror category/app URL. Automatically handles bundle merging and Cloudflare challenges. |
+| `uptodown_url` | `string` | `""` | Uptodown app URL. Scrapes version history and resolves direct CDN links. |
+| `apkpure_url` | `string` | `""` | APKPure app URL. Downloads APK or `.xapk` bundles. |
+| `ia_url` | `string` | `""` | Internet Archive directory URL containing pre-uploaded stock APKs. |
+| `direct_url` | `string` | `""` | Direct download URL. Supports `{version}` and `{arch}` template variables. |
 
 ### Patcher & Prebuilts Overrides
 
@@ -140,6 +140,7 @@ version = "auto"
 arch = ["universal"]
 apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
 uptodown_url = "https://youtube.en.uptodown.com/android"
+apkpure_url = "https://apkpure.com/youtube-app/com.google.android.youtube"
 ia_url = "https://archive.org/download/jhc-apks/apks/com.google.android.youtube"
 cli_source = "MorpheApp/morphe-cli"
 cli_version = "latest"

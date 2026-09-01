@@ -73,6 +73,11 @@ pip install -r requirements.txt
   python build.py --check-updates
   ```
 
+- **Custom config path**:
+  ```bash
+  python build.py -c custom_config.toml
+  ```
+
 - **Clean temporary directories and build artifacts**:
   ```bash
   python build.py --clean
@@ -91,7 +96,9 @@ keystore = "keystore.keystore"
 keystore_alias = "vietanhbui2000"
 keystore_password = "1234567890"
 default_cli_source = "MorpheApp/morphe-cli"
+default_cli_version = "latest"
 default_patches_source = "MorpheApp/morphe-patches"
+default_patches_version = "latest"
 ```
 
 ### Defining an App
@@ -126,7 +133,7 @@ morphe-apps-builder/
 ├── CONFIG.md                   # Detailed configuration reference and schema
 ├── keystore.keystore           # Release signing keystore (alias: vietanhbui2000)
 ├── KEYSTORE.md                 # Keystore management, PKCS12 format & signing guide
-├── requirements.txt            # Python dependencies (requests, beautifulsoup4, urllib3, protobuf)
+├── requirements.txt            # Python dependencies (requests, beautifulsoup4, protobuf)
 ├── build.py                    # Main CLI orchestrator (download, patch, RELEASE.md generation)
 │
 ├── .github/                    # CI/CD automation
