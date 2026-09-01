@@ -78,33 +78,22 @@ jobs:
           RELEASE_TAG="$(date +'%y%m%d%H%M%S')"
           echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Prune Old Releases & Orphaned Tags
+      - name: Checkout Previous Release Notes
         run: |
-          echo "Cleaning older releases (keeping 9 most recent)..."
-          ALL_TAGS=$(gh release list --limit 100 --json tagName -q '.[].tagName')
-          TOTAL=$(echo "$ALL_TAGS" | grep -v '^$' | wc -l | tr -d ' ')
-          if [ "$TOTAL" -gt 9 ]; then
-            echo "$ALL_TAGS" | tail -n +10 | while read -r old_tag; do
-              [ -n "$old_tag" ] || continue
-              echo "Deleting old release: $old_tag"
-              gh release delete "$old_tag" --yes || true
-            done
-          fi
-
-          echo "Pruning orphaned git tags..."
-          git fetch --tags
-          RELEASE_TAGS=$(gh release list --limit 100 --json tagName -q '.[].tagName')
-          git tag -l | while read -r t; do
-            if ! echo "$RELEASE_TAGS" | grep -q "^${t}$"; then
-              git push --delete origin "$t" 2>/dev/null || true
-              git tag -d "$t" 2>/dev/null || true
-            fi
-          done
+          git checkout origin/releaselog RELEASE.md || true
 
       - name: Patch & Sign APKs
         env:
           RELEASE_TAG: ${{ steps.tag_gen.outputs.RELEASE_TAG }}
         run: python build.py --patch-only
+
+      - name: Upload Build Artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: patched-apks-${{ steps.tag_gen.outputs.RELEASE_TAG }}
+          path: output/*.apk
+          if-no-files-found: ignore
 
       - name: Capture Release Notes
         id: release_notes
@@ -129,6 +118,29 @@ jobs:
             echo "No APKs found in output directory to publish."
             exit 1
           fi
+
+      - name: Prune Old Releases & Orphaned Tags
+        run: |
+          echo "Cleaning older releases (keeping 9 most recent)..."
+          ALL_TAGS=$(gh release list --limit 100 --json tagName -q '.[].tagName')
+          TOTAL=$(echo "$ALL_TAGS" | grep -v '^$' | wc -l | tr -d ' ')
+          if [ "$TOTAL" -gt 9 ]; then
+            echo "$ALL_TAGS" | tail -n +10 | while read -r old_tag; do
+              [ -n "$old_tag" ] || continue
+              echo "Deleting old release: $old_tag"
+              gh release delete "$old_tag" --yes || true
+            done
+          fi
+
+          echo "Pruning orphaned git release tags..."
+          git fetch --tags
+          RELEASE_TAGS=$(gh release list --limit 100 --json tagName -q '.[].tagName')
+          git tag -l | grep -E '^[0-9]{12}$' | while read -r t; do
+            if ! echo "$RELEASE_TAGS" | grep -q "^${t}$"; then
+              git push --delete origin "$t" 2>/dev/null || true
+              git tag -d "$t" 2>/dev/null || true
+            fi
+          done
 
       - name: Commit RELEASE.md to releaselog branch
         run: |

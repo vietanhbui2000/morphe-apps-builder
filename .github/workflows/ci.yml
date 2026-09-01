@@ -15,7 +15,7 @@ jobs:
     name: Check New Updates
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       actions: write
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,3 +73,4 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       apps: ${{ needs.check.outputs.apps_to_build }}
+    secrets: inherit

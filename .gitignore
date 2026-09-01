@@ -13,7 +13,7 @@ venv/
 # Build and temporary artifacts
 temp/
 output/
-release.md
+RELEASE.md
 *.tmp
 *.apk
 *.apkm
