@@ -7,6 +7,7 @@ Supports unified all-in-one builds as well as decoupled --download-only and --pa
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -53,39 +54,102 @@ def clean_workspace():
     log_success("Workspace cleaned.")
 
 
+def _extract_source_tag_from_release_md(source: str, release_text: str) -> str:
+    """Extract tag for a CLI or patches repository from previous RELEASE.md."""
+    if not release_text:
+        return ""
+    pattern = rf"{re.escape(source)}\s+\[?([a-zA-Z0-9._-]+)\]?"
+    match = re.search(pattern, release_text)
+    return match.group(1) if match else ""
+
+
 def check_updates(config_path: Path) -> int:
     """Check for upstream CLI and patches updates across all enabled apps."""
     general, apps = load_config(config_path)
     enabled_apps = [a for a in apps if a.enabled]
 
-    log_stage("Checking for upstream updates")
-    sources = set((a.cli_source, a.patches_source) for a in enabled_apps)
+    log_stage("Checking for Upstream Updates")
+
+    unique_cli_sources = list(dict.fromkeys(a.cli_source for a in enabled_apps))
+    unique_patches_sources = list(dict.fromkeys(a.patches_source for a in enabled_apps))
+
+    all_sources = unique_cli_sources + unique_patches_sources
+    total_checks = len(all_sources)
 
     release_md = ROOT_DIR / "RELEASE.md"
     prev_release_text = release_md.read_text(encoding="utf-8") if release_md.is_file() else ""
-    should_build = not bool(prev_release_text)
 
-    for cli_source, patches_source in sources:
-        log_info(f"Checking {cli_source}...")
-        cli_rel = github_client.get_release(cli_source, "latest")
-        if cli_rel:
-            cli_tag = cli_rel.get("tag_name", "")
-            log_success(f"Latest CLI: {cli_tag} ({cli_source})", indent=1)
-            if cli_tag and cli_tag not in prev_release_text:
-                should_build = True
+    source_current_tags: Dict[str, str] = {}
+    source_latest_tags: Dict[str, str] = {}
+    source_has_update: Dict[str, bool] = {}
 
-        log_info(f"Checking {patches_source}...")
-        patches_rel = github_client.get_release(patches_source, "latest")
-        if patches_rel:
-            patches_tag = patches_rel.get("tag_name", "")
-            log_success(f"Latest Patches: {patches_tag} ({patches_source})", indent=1)
-            if patches_tag and patches_tag not in prev_release_text:
-                should_build = True
+    for idx, source in enumerate(all_sources, 1):
+        group_start(f"Check [{idx}/{total_checks}]: {source}")
+        current_tag = _extract_source_tag_from_release_md(source, prev_release_text)
+        source_current_tags[source] = current_tag
 
-    if should_build:
+        rel = github_client.get_release(source, "latest")
+        latest_tag = rel.get("tag_name", "") if rel else ""
+        source_latest_tags[source] = latest_tag
+
+        log_info(f"Current: {current_tag or 'none'}", indent=1)
+        log_info(f"Latest: {latest_tag or 'unknown'}", indent=1)
+
+        has_update = bool(latest_tag and latest_tag != current_tag) if prev_release_text else True
+        source_has_update[source] = has_update
+
+        if has_update:
+            log_success("Updates available.", indent=1)
+        else:
+            log_info("Up to date.", indent=1)
+
+        group_end()
+
+    # Determine which apps need to be built
+    apps_to_build: List[str] = []
+    app_summary_rows: List[Tuple[str, str, str, str, str, bool, bool]] = []
+
+    for app in enabled_apps:
+        cli_cur = source_current_tags.get(app.cli_source, "")
+        cli_lat = source_latest_tags.get(app.cli_source, "")
+        cli_up = source_has_update.get(app.cli_source, False)
+
+        pat_cur = source_current_tags.get(app.patches_source, "")
+        pat_lat = source_latest_tags.get(app.patches_source, "")
+        pat_up = source_has_update.get(app.patches_source, False)
+
+        if cli_up or pat_up or not prev_release_text:
+            apps_to_build.append(app.name)
+            app_summary_rows.append((app.name, app.cli_source, cli_lat or cli_cur, app.patches_source, pat_lat or pat_cur, cli_up, pat_up))
+
+    print("=" * 70)
+    print(f"{Colors.BOLD}CHECK SUMMARY{Colors.RESET}")
+    print("=" * 70)
+
+    if app_summary_rows:
+        print("> Sources")
+        for source in all_sources:
+            cur = source_current_tags.get(source, "")
+            lat = source_latest_tags.get(source, "")
+            if cur and lat and cur != lat:
+                print(f"{source}: {cur} -> {lat}")
+            else:
+                print(f"{source}: {lat or cur or 'unknown'}")
+
+        print("> Apps")
+        for app_name, cli_src, cli_tag, pat_src, pat_tag, cli_up, pat_up in app_summary_rows:
+            icon = f"{Colors.YELLOW}[~]{Colors.RESET}"
+            cli_marker = "⌃" if cli_up else ""
+            pat_marker = "⌃" if pat_up else ""
+            print(f"{icon} {app_name}: TO BUILD")
+            print(f"└ {cli_src} {cli_tag}{cli_marker} + {pat_src} {pat_tag}{pat_marker}")
+
         print("SHOULD_BUILD=1")
+        print(f"APPS_TO_BUILD={','.join(apps_to_build)}")
     else:
+        print("All sources are up to date.")
         print("SHOULD_BUILD=0")
+        print("APPS_TO_BUILD=")
 
     return 0
 
@@ -414,10 +478,82 @@ def _get_github_repo() -> str:
     return repo
 
 
-def write_build_summary(results: List[BuildResult]) -> int:
+def write_download_summary(
+    download_targets: List[Dict[str, Any]],
+    failed_downloads: List[BuildResult]
+) -> int:
+    """Generate console summary for the download phase."""
+    print("=" * 70)
+    print(f"{Colors.BOLD}DOWNLOAD SUMMARY{Colors.RESET}")
+    print("=" * 70)
+
+    grouped_success: Dict[str, List[Dict[str, Any]]] = {}
+    for t in download_targets:
+        name = t.get("name", "")
+        if name:
+            grouped_success.setdefault(name, []).append(t)
+
+    grouped_failed: Dict[str, List[BuildResult]] = {}
+    for f in failed_downloads:
+        grouped_failed.setdefault(f.name, []).append(f)
+
+    all_app_names = list(dict.fromkeys(list(grouped_success.keys()) + list(grouped_failed.keys())))
+
+    for name in all_app_names:
+        app_targets = grouped_success.get(name, [])
+        app_failures = grouped_failed.get(name, [])
+
+        v_raw = ""
+        if app_targets:
+            v_raw = app_targets[0].get("version", "")
+        elif app_failures:
+            v_raw = app_failures[0].version
+        version = f"v{v_raw}" if v_raw and not v_raw.startswith("v") else (v_raw or "vauto")
+
+        total_targets = len(app_targets) + len(app_failures)
+        is_multi = total_targets > 1
+
+        if app_targets and not app_failures:
+            icon = f"{Colors.GREEN}[✓]{Colors.RESET}"
+            if is_multi:
+                parts = [
+                    f"{version} ({t.get('arch')}) > {Path(t['stock_apk_path']).name if t.get('stock_apk_path') else f'{t.get('name')}_{t.get('version')}_{t.get('arch')}.apk'}"
+                    for t in app_targets
+                ]
+                print(f"{icon} {name}: {', '.join(parts)}")
+            else:
+                t = app_targets[0]
+                apk_name = Path(t["stock_apk_path"]).name if t.get("stock_apk_path") else f"{t.get('name')}_{t.get('version')}_{t.get('arch')}.apk"
+                print(f"{icon} {name}: {version} > {apk_name}")
+        elif app_targets and app_failures:
+            icon = f"{Colors.YELLOW}[▲]{Colors.RESET}"
+            parts = [
+                f"{version} ({t.get('arch')}) > {Path(t['stock_apk_path']).name if t.get('stock_apk_path') else f'{t.get('name')}_{t.get('version')}_{t.get('arch')}.apk'}"
+                for t in app_targets
+            ]
+            for f in app_failures:
+                err = f.error_message or "Download failed"
+                parts.append(f"{version} ({f.arch}) > FAILED ~ {err}")
+            print(f"{icon} {name}: {', '.join(parts)}")
+        else:
+            icon = f"{Colors.RED}[✗]{Colors.RESET}"
+            if is_multi:
+                parts = [f"{version} ({f.arch}) > FAILED ~ {f.error_message or 'Download failed'}" for f in app_failures]
+                print(f"{icon} {name}: {', '.join(parts)}")
+            else:
+                err = app_failures[0].error_message if app_failures else "Download failed"
+                print(f"{icon} {name}: {version} > FAILED ~ {err}")
+
+    if download_targets:
+        save_manifest(download_targets)
+
+    return 0 if download_targets else 1
+
+
+def write_patch_summary(results: List[BuildResult]) -> int:
     """Generate console summary and RELEASE.md."""
     print("=" * 70)
-    print(f"{Colors.BOLD}BUILD SUMMARY{Colors.RESET}")
+    print(f"{Colors.BOLD}PATCH SUMMARY{Colors.RESET}")
     print("=" * 70)
 
     # Group results by name maintaining order
@@ -428,28 +564,45 @@ def write_build_summary(results: List[BuildResult]) -> int:
     for name, app_results in grouped.items():
         all_success = all(r.success for r in app_results)
         any_success = any(r.success for r in app_results)
+        is_multi = len(app_results) > 1
+
+        first_r = app_results[0]
+        v_raw = first_r.version
+        version = f"v{v_raw}" if v_raw and not v_raw.startswith("v") else (v_raw or "vauto")
 
         if all_success:
-            status = f"[{Colors.GREEN}✓ SUCCESS{Colors.RESET}]"
-            apk_names = [
-                r.output_path.name if r.output_path else f"{r.name}_v{r.version}{'' if r.arch in ('all', 'universal', '') else f'_{r.arch}'}.apk"
-                for r in app_results
-            ]
-            print(f"{name}: {status} -> {', '.join(apk_names)}")
+            icon = f"{Colors.GREEN}[✓]{Colors.RESET}"
+            if is_multi:
+                parts = [
+                    f"{version} ({r.arch}) > {r.output_path.name if r.output_path else f'{r.name}_{version}_{r.arch}.apk'}"
+                    for r in app_results
+                ]
+                print(f"{icon} {name}: {', '.join(parts)}")
+            else:
+                apk_name = first_r.output_path.name if first_r.output_path else f"{first_r.name}_{version}.apk"
+                print(f"{icon} {name}: {version} > {apk_name}")
         elif any_success:
-            status = f"[{Colors.YELLOW}⚠ PARTIAL{Colors.RESET}]"
+            icon = f"{Colors.YELLOW}[▲]{Colors.RESET}"
             parts = []
             for r in app_results:
                 if r.success and r.output_path:
-                    parts.append(r.output_path.name)
+                    parts.append(f"{version} ({r.arch}) > {r.output_path.name}")
                 else:
-                    parts.append(f"{r.arch} failed ({r.error_message})")
-            print(f"{name}: {status} -> {', '.join(parts)}")
+                    err = r.error_message or "Patching failed"
+                    parts.append(f"{version} ({r.arch}) > FAILED ~ {err}")
+            print(f"{icon} {name}: {', '.join(parts)}")
         else:
-            status = f"[{Colors.RED}✗ FAILED{Colors.RESET}]"
-            err_msgs = list(dict.fromkeys(r.error_message for r in app_results if r.error_message))
-            err_str = f" ({', '.join(err_msgs)})" if err_msgs else ""
-            print(f"{name}: {status}{err_str}")
+            icon = f"{Colors.RED}[✗]{Colors.RESET}"
+            if is_multi:
+                parts = [f"{version} ({r.arch}) > FAILED ~ {r.error_message or 'Patching failed'}" for r in app_results]
+                print(f"{icon} {name}: {', '.join(parts)}")
+            else:
+                err = first_r.error_message or "Patching failed"
+                print(f"{icon} {name}: {version} > FAILED ~ {err}")
+
+        cli_tag = first_r.cli_tag or "latest"
+        patches_tag = first_r.patches_tag or "latest"
+        print(f"└ {first_r.cli_source} {cli_tag} + {first_r.patches_source} {patches_tag}")
 
     # Write RELEASE.md for GitHub Releases
     release_md = ROOT_DIR / "RELEASE.md"
@@ -458,7 +611,7 @@ def write_build_summary(results: List[BuildResult]) -> int:
     repo = _get_github_repo()
     release_tag = os.environ.get("RELEASE_TAG", "").strip()
 
-    app_blocks = []
+    new_app_blocks: Dict[str, str] = {}
     for name, app_results in grouped.items():
         success_results = [r for r in app_results if r.success]
         if not success_results:
@@ -491,10 +644,22 @@ def write_build_summary(results: List[BuildResult]) -> int:
         patches_str = f"{first_r.patches_source} {patches_link}".strip()
 
         sub = f"└ {cli_str} + {patches_str}"
-        app_blocks.append(f"{header}\n{sub}")
+        new_app_blocks[name] = f"{header}\n{sub}"
 
-    if app_blocks:
-        sections.append("\n\n".join(app_blocks))
+    final_blocks_dict: Dict[str, str] = {}
+    if release_md.is_file():
+        prev_content = release_md.read_text(encoding="utf-8")
+        for chunk in prev_content.split("\n\n"):
+            chunk_s = chunk.strip()
+            if ":" in chunk_s and "└" in chunk_s:
+                app_key = chunk_s.split(":", 1)[0].strip()
+                final_blocks_dict[app_key] = chunk_s
+
+    final_blocks_dict.update(new_app_blocks)
+
+    sections = []
+    if final_blocks_dict:
+        sections.append("\n\n".join(final_blocks_dict.values()))
         sections.append("ℹ Install [MicroG ↗](https://github.com/MorpheApp/MicroG-RE/) to enable Google account authentication and services for Morphe apps.")
 
     release_md.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
@@ -506,7 +671,7 @@ def write_build_summary(results: List[BuildResult]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Morphe Apps Builder")
     parser.add_argument("-c", "--config", default="config.toml", help="Path to config.toml")
-    parser.add_argument("-a", "--app", help="Build or download only a specific app by section name")
+    parser.add_argument("-a", "--app", help="Build or download only a specific app by section name (comma-separated for multiple)")
     parser.add_argument("--download-only", action="store_true", help="Download prebuilts and stock APKs only")
     parser.add_argument("--patch-only", action="store_true", help="Patch and sign pre-downloaded APKs only")
     parser.add_argument("--check-updates", action="store_true", help="Check for patch updates without building")
@@ -524,11 +689,12 @@ def main() -> int:
 
     general, apps = load_config(config_path)
 
-    # Filter apps if --app specified
+    # Filter apps if --app specified (supports comma-separated list)
     if args.app:
-        apps = [a for a in apps if a.name.lower() == args.app.lower() or a.id.lower() == args.app.lower()]
+        target_names = {x.strip().lower() for x in args.app.split(",") if x.strip()}
+        apps = [a for a in apps if a.name.lower() in target_names or a.id.lower() in target_names]
         if not apps:
-            log_error(f"No matching app found in config for '{args.app}'")
+            log_error(f"No matching apps found in config for '{args.app}'")
             return 1
 
     enabled_apps = [a for a in apps if a.enabled]
@@ -642,15 +808,11 @@ def main() -> int:
 
             group_end()
 
-        save_manifest(download_targets)
         targets_to_patch = download_targets
+        download_exit_code = write_download_summary(download_targets, failed_downloads)
 
         if args.download_only:
-            log_success(f"Download phase complete. Ready to patch {len(download_targets)} target(s).")
-            if failed_downloads:
-                for f in failed_downloads:
-                    log_warn(f"Failed download: {f.name} ({f.arch}) ({f.error_message})")
-            return 0 if download_targets else 1
+            return download_exit_code
 
     # --------------------------------------------------------------------------
     # PHASE 2: PATCH & BUILD PHASE
@@ -692,7 +854,7 @@ def main() -> int:
         group_end()
 
     all_results = failed_downloads + results if not args.patch_only else results
-    return write_build_summary(all_results)
+    return write_patch_summary(all_results)
 
 
 if __name__ == "__main__":
