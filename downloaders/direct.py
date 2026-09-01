@@ -34,10 +34,10 @@ class DirectDownloader(BaseDownloader):
     ) -> Optional[Path]:
         formatted_url = url.replace("{version}", version).replace("{arch}", arch)
         ext = ".apkm" if ".apkm" in formatted_url else (".xapk" if ".xapk" in formatted_url else ".apk")
-        dest_file = output_path.parent / f"{output_path.name}{ext}"
+        dest_path = output_path.with_suffix(ext)
 
         log_info(f"[Direct] Downloading from {formatted_url}...", indent=2)
-        if http_client.download_file(formatted_url, dest_file):
-            return dest_file
+        if http_client.download_file(formatted_url, dest_path):
+            return dest_path
 
         return None

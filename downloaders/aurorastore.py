@@ -20,6 +20,7 @@ try:
 except ImportError:
     HAS_REQUESTS = False
 
+from core.http import http_client
 from core.logger import log_info, log_warn
 from downloaders.base import BaseDownloader
 
@@ -312,34 +313,6 @@ class AuroraStoreDownloader(BaseDownloader):
         session.headers.update({"User-Agent": "com.aurora.store-4.8.3-75"})
         return session
 
-    def _get_flaresolverr_cookies(self, url: str) -> Tuple[Dict[str, str], str]:
-        fs_url = os.environ.get("FLARESOLVERR_URL", "http://localhost:8191/v1")
-        for target in (url, "https://auroraoss.com/"):
-            try:
-                payload = json.dumps({
-                    "cmd": "request.get",
-                    "url": target,
-                    "maxTimeout": 60000,
-                    "returnOnlyCookies": True
-                }).encode("utf-8")
-                req = urllib.request.Request(
-                    fs_url,
-                    data=payload,
-                    headers={"Content-Type": "application/json"}
-                )
-                with urllib.request.urlopen(req, timeout=70) as resp:
-                    if resp.status == 200:
-                        data = json.loads(resp.read().decode("utf-8", errors="ignore"))
-                        if data.get("status") == "ok":
-                            solution = data.get("solution", {})
-                            cookies = {c["name"]: c["value"] for c in solution.get("cookies", []) if "name" in c and "value" in c}
-                            ua = solution.get("userAgent", "")
-                            if cookies:
-                                return cookies, ua
-            except Exception:
-                pass
-        return {}, ""
-
     def _post_dispenser(self, session: Any, dispenser_url: str) -> Optional[dict]:
         headers = {
             "Content-Type": "application/json",
@@ -352,7 +325,7 @@ class AuroraStoreDownloader(BaseDownloader):
             resp = session.post(dispenser_url, json=DEVICE_PROPERTIES, headers=headers, timeout=30)
             if resp.status_code == 403:
                 log_info("[AuroraStore] Dispenser returned 403, resolving Cloudflare with FlareSolverr...", indent=2)
-                cookies, fs_ua = self._get_flaresolverr_cookies(dispenser_url)
+                cookies, fs_ua = http_client.get_flaresolverr_cookies(dispenser_url)
                 if cookies:
                     for k, v in cookies.items():
                         session.cookies.set(k, v)
@@ -384,7 +357,7 @@ class AuroraStoreDownloader(BaseDownloader):
             return None
 
         dispenser_url = url if url.startswith("http") else DEFAULT_DISPENSER_URL
-        package_name = app_id or (output_path.stem.split("_")[0] if "_" in output_path.stem else output_path.stem)
+        package_name = app_id or output_path.stem
 
         log_info(f"[AuroraStore] Connecting to dispenser {dispenser_url} for {package_name}...", indent=2)
         session = self._init_session(dispenser_url)
@@ -532,7 +505,7 @@ class AuroraStoreDownloader(BaseDownloader):
             # 9. Download payload
             if splits:
                 log_info(f"[AuroraStore] Split APK detected ({len(splits)} splits). Downloading bundle...", indent=2)
-                dest_bundle = output_path.parent / f"{output_path.name}.apkm"
+                dest_bundle_path = output_path.with_suffix(".apkm")
                 with tempfile.TemporaryDirectory() as tmp_dir:
                     tmp_p = Path(tmp_dir)
                     base_f = tmp_p / "base.apk"
@@ -546,20 +519,20 @@ class AuroraStoreDownloader(BaseDownloader):
                         s_resp.raise_for_status()
                         s_f.write_bytes(s_resp.content)
 
-                    with zipfile.ZipFile(dest_bundle, "w", zipfile.ZIP_DEFLATED) as zf:
+                    with zipfile.ZipFile(dest_bundle_path, "w", zipfile.ZIP_DEFLATED) as zf:
                         zf.write(base_f, "base.apk")
                         for s in splits:
                             zf.write(tmp_p / s["name"], s["name"])
 
-                log_info(f"[AuroraStore] Saved split bundle to {dest_bundle.name}", indent=2)
-                return dest_bundle
+                log_info(f"[AuroraStore] Saved split bundle to {dest_bundle_path.name}", indent=2)
+                return dest_bundle_path
             else:
-                dest_apk = output_path.parent / f"{output_path.name}.apk"
-                log_info(f"[AuroraStore] Downloading standalone APK to {dest_apk.name}...", indent=2)
+                dest_apk_path = output_path.with_suffix(".apk")
+                log_info(f"[AuroraStore] Downloading standalone APK to {dest_apk_path.name}...", indent=2)
                 r = session.get(download_url, stream=True, timeout=120)
                 r.raise_for_status()
-                dest_apk.write_bytes(r.content)
-                return dest_apk
+                dest_apk_path.write_bytes(r.content)
+                return dest_apk_path
 
         except Exception as e:
             log_warn(f"[AuroraStore] Download failed: {e}", indent=2)

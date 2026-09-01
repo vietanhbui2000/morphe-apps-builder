@@ -100,10 +100,10 @@ class IADownloader(BaseDownloader):
         file_url = f"{clean_url}/{matched_file}" if not matched_file.startswith("http") else matched_file
         is_bundle = matched_file.endswith(".apkm")
         ext = ".apkm" if is_bundle else ".apk"
-        dest_file = output_path.parent / f"{output_path.name}{ext}"
+        dest_path = output_path.with_suffix(ext)
 
         log_info(f"[Internet Archive] Downloading payload {matched_file}...", indent=2)
-        if http_client.download_file(file_url, dest_file):
-            return dest_file
+        if http_client.download_file(file_url, dest_path):
+            return dest_path
 
         return None
