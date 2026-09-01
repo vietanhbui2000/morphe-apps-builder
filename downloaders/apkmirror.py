@@ -281,7 +281,7 @@ class APKMirrorDownloader(BaseDownloader):
             return (arch_score, dpi_score, type_score)
 
         sorted_variants = sorted(variants, key=score_variant)
-        matched_variant = sorted_variants[0] if sorted_variants else variants[0]
+        matched_variant = sorted_variants[0]
 
         is_bundle = (matched_variant["type"] == "BUNDLE")
         ext = ".apkm" if is_bundle else ".apk"

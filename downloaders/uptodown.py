@@ -63,6 +63,9 @@ class UptodownDownloader(BaseDownloader):
                 if match:
                     data_code = match.group(1)
 
+        if not data_code:
+            return None
+
         return clean_url, data_code
 
     def get_versions(self, url: str) -> list[str]:
