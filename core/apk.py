@@ -17,6 +17,16 @@ BIN_DIR = Path(__file__).resolve().parent.parent / "bin"
 APK_EDITOR = BIN_DIR / "APKEditor.jar"
 APK_SIGNER = BIN_DIR / "apksigner.jar"
 
+ARCH_ALIAS_MAP = {
+    "arm64": "arm64-v8a",
+    "arm64-v8a": "arm64-v8a",
+    "arm": "armeabi-v7a",
+    "armeabi": "armeabi-v7a",
+    "armeabi-v7a": "armeabi-v7a",
+    "x86": "x86",
+    "x86_64": "x86_64",
+}
+
 def ensure_keystore(
     keystore_path: Path,
     keystore_alias: str = "vietanhbui2000",
@@ -137,15 +147,6 @@ def get_apk_architectures(apk_path: Path) -> list[str]:
     if not apk_path.is_file():
         return []
 
-    alias_map = {
-        "arm64": "arm64-v8a",
-        "arm64-v8a": "arm64-v8a",
-        "arm": "armeabi-v7a",
-        "armeabi": "armeabi-v7a",
-        "armeabi-v7a": "armeabi-v7a",
-        "x86": "x86",
-        "x86_64": "x86_64",
-    }
     abis = set()
 
     try:
@@ -154,7 +155,7 @@ def get_apk_architectures(apk_path: Path) -> list[str]:
                 if name.startswith("lib/"):
                     parts = name.split("/")
                     if len(parts) >= 2 and parts[1]:
-                        norm = alias_map.get(parts[1], parts[1])
+                        norm = ARCH_ALIAS_MAP.get(parts[1], parts[1])
                         abis.add(norm)
     except Exception as e:
         log_error(f"Failed to inspect APK architectures in {apk_path.name}: {e}", indent=2)
@@ -162,7 +163,7 @@ def get_apk_architectures(apk_path: Path) -> list[str]:
     order = ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
     return sorted(list(abis), key=lambda x: order.index(x) if x in order else 99)
 
-def strip_archs(apk_path: Path, keep_arch: str, output_path: Path) -> bool:
+def strip_architectures(apk_path: Path, keep_arch: str, output_path: Path) -> bool:
     """
     Remove all native libraries except those matching keep_arch by streaming zip entries.
     """
@@ -170,16 +171,7 @@ def strip_archs(apk_path: Path, keep_arch: str, output_path: Path) -> bool:
         if apk_path != output_path:
             shutil.copy2(apk_path, output_path)
         return True
-    alias_map = {
-        "arm64": "arm64-v8a",
-        "arm64-v8a": "arm64-v8a",
-        "arm": "armeabi-v7a",
-        "armeabi": "armeabi-v7a",
-        "armeabi-v7a": "armeabi-v7a",
-        "x86": "x86",
-        "x86_64": "x86_64",
-    }
-    normalized_keep = alias_map.get(keep_arch, keep_arch)
+    normalized_keep = ARCH_ALIAS_MAP.get(keep_arch, keep_arch)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_out_path = output_path.parent / f"{output_path.name}.stripped.tmp"
@@ -190,7 +182,7 @@ def strip_archs(apk_path: Path, keep_arch: str, output_path: Path) -> bool:
                 if item.filename.startswith("lib/"):
                     parts = item.filename.split("/", 2)
                     if len(parts) >= 2 and parts[1]:
-                        abi = alias_map.get(parts[1], parts[1])
+                        abi = ARCH_ALIAS_MAP.get(parts[1], parts[1])
                         if abi != normalized_keep:
                             continue
                 zout.writestr(item, zin.read(item.filename))

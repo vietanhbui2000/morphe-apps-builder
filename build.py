@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.apk import merge_bundle, strip_archs, sign_apk, ensure_apk_editor, ensure_keystore, get_apk_architectures
+from core.apk import merge_bundle, strip_architectures, sign_apk, ensure_apk_editor, ensure_keystore, get_apk_architectures
 from core.config import load_config
 from core.github import github_client
 from core.logger import (
@@ -418,7 +418,7 @@ def patch_single_target(
     if arch not in ("all", "universal", ""):
         log_info(f"Filtering native libraries for {arch}...", indent=1)
         stripped_apk_path = TEMP_DIR / f"stripped_{final_apk_name}"
-        if strip_archs(temp_patched_path, arch, stripped_apk_path):
+        if strip_architectures(temp_patched_path, arch, stripped_apk_path):
             temp_patched_path = stripped_apk_path
 
     log_info("Signing release APK...", indent=1)
