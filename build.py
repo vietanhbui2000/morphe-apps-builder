@@ -171,7 +171,7 @@ def resolve_app_version(
 ) -> Optional[str]:
     """Resolve target version for app (from config, patches compatibility list, or fallback)."""
     if app.version != "auto":
-        log_info(f"Using explicitly configured version: {app.version}", indent=1)
+        log_info(f"Using explicitly configured version: {app.version}")
         return app.version
 
     if dry_run:
@@ -181,16 +181,16 @@ def resolve_app_version(
     if cli_path.is_file() and patches_path.is_file():
         resolved = morphe_patcher.get_compatible_version(cli_path, patches_path, app.id)
         if resolved:
-            log_success(f"Resolved compatible version from patch bundle: {resolved}", indent=1)
+            log_success(f"Resolved compatible version from patch bundle: {resolved}")
             return resolved
 
     # Fallback to scraping first available version from download providers
-    log_warn("Version not found in patch bundle. Falling back to latest from sources...", indent=1)
+    log_warn("Version not found in patch bundle. Falling back to latest from sources...")
     sources = get_download_sources_for_app(app)
     for _, downloader, src_url in sources:
         vers = downloader.get_versions(src_url)
         if vers:
-            log_success(f"Fallback version resolved from {downloader.display_name}: {vers[0]}", indent=1)
+            log_success(f"Fallback version resolved from {downloader.display_name}: {vers[0]}")
             return vers[0]
 
     return None
@@ -363,7 +363,7 @@ def patch_single_target(
     patches_tag = target_info.get("patches_tag", "")
     patches_path = Path(target_info.get("patches_path", ""))
 
-    log_stage(f"Patching {name} ({arch}) v{version}")
+    log_stage(f"Patching {name} v{version} ({arch})")
 
     if dry_run:
         log_info(f"[DRY-RUN] Would patch {name} v{version} ({arch})", indent=1)
