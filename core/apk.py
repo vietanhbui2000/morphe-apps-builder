@@ -157,6 +157,16 @@ def get_apk_architectures(apk_path: Path) -> list[str]:
                     if len(parts) >= 2 and parts[1]:
                         norm = ARCH_ALIAS_MAP.get(parts[1], parts[1])
                         abis.add(norm)
+                elif name.endswith(".apk"):
+                    name_lower = name.lower()
+                    if "arm64" in name_lower or "arm64_v8a" in name_lower:
+                        abis.add("arm64-v8a")
+                    if "armeabi_v7a" in name_lower or "armeabi-v7a" in name_lower or "arm-v7a" in name_lower or "arm_v7a" in name_lower:
+                        abis.add("armeabi-v7a")
+                    if "x86_64" in name_lower:
+                        abis.add("x86_64")
+                    elif "x86" in name_lower:
+                        abis.add("x86")
     except Exception as e:
         log_error(f"Failed to inspect APK architectures in {apk_path.name}: {e}", indent=2)
 
@@ -167,7 +177,7 @@ def strip_architectures(apk_path: Path, keep_arch: str, output_path: Path) -> bo
     """
     Remove all native libraries except those matching keep_arch by streaming zip entries.
     """
-    if keep_arch in ("all", "universal", ""):
+    if keep_arch in ("all", "universal", "", "arm64-v8a+armeabi-v7a", "arm64-v8a + armeabi-v7a"):
         if apk_path != output_path:
             shutil.copy2(apk_path, output_path)
         return True
