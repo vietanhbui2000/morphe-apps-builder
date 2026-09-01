@@ -106,7 +106,7 @@ default_patches_version = "latest"
 [YouTube]
 enabled = true
 id = "com.google.android.youtube"
-version = "auto"                         # "auto" (highest compatible), "latest", or pinned (e.g. "21.34.243")
+version = "auto"                         # "auto" (supports all patches), "latest", "beta", or pinned (e.g. "21.34.243")
 arch = ["universal"]                     # ["universal"] for universal APK, or ["arm64-v8a", "armeabi-v7a"] for split APKs
 apkmirror_url = "https://www.apkmirror.com/apk/google-inc/youtube/"
 uptodown_url = "https://youtube.en.uptodown.com/android"

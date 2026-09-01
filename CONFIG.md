@@ -33,9 +33,9 @@ The `[general]` table defines fallback defaults for all apps:
 | `keystore_alias` | `string` | `"vietanhbui2000"` | Keystore entry alias. |
 | `keystore_password` | `string` | `"1234567890"` | Keystore and key password. |
 | `default_cli_source` | `string` | `"MorpheApp/morphe-cli"` | Default GitHub repository for Morphe CLI. |
-| `default_cli_version` | `string` | `"latest"` | Default Morphe CLI release tag. |
+| `default_cli_version` | `string` | `"latest"` | Default Morphe CLI release strategy: `"latest"` (stable release), `"beta"` (pre-release), or a specific tag. |
 | `default_patches_source` | `string` | `"MorpheApp/morphe-patches"` | Default GitHub repository for `.mpp` patch bundles. |
-| `default_patches_version` | `string` | `"latest"` | Default patches release tag. |
+| `default_patches_version` | `string` | `"latest"` | Default patches release strategy: `"latest"` (stable release), `"beta"` (pre-release), or a specific tag. |
 
 ```toml
 [general]
@@ -60,7 +60,7 @@ The section header (`[YouTube]`, `[YouTube-Music]`, etc.) directly defines the a
 | :--- | :--- | :--- | :--- |
 | `enabled` | `boolean` | `true` | Set to `false` to temporarily skip building this app. |
 | `id` | `string` | **Required** | The Android application package identifier (e.g. `com.google.android.youtube`). Used by Morphe CLI to query compatible versions and filter patches. |
-| `version` | `string` | `"auto"` | Target version strategy:<br>• `"auto"`: Automatically queries the patch bundle and resolves the highest supported version.<br>• `"latest"`: Downloads the latest upstream version from downloaders.<br>• `"X.Y.Z"`: Pins an exact version (e.g. `"21.18.168"`). |
+| `version` | `string` | `"auto"` | Target version strategy:<br>• `"auto"`: Selects the app version from the patch bundle that supports all patches.<br>• `"latest"`: Always selects the newest version of the app from the patch bundle, even if it does not support all patches.<br>• `"beta"`: Selects the newest beta/pre-release compatible version from the patch bundle.<br>• `"X.Y.Z"`: Pins an exact version (e.g. `"21.18.168"`). |
 | `arch` | `list[string]` | `["universal"]` | Target architectures to build. Supported values:<br>• `["universal"]`: Downloads and builds a single universal APK.<br>• `["all"]`: Discovers, downloads, and builds all available architecture packages published for that version.<br>• `["arm64-v8a", "armeabi-v7a"]`: Downloads and builds APKs for specified architectures.<br>• `["x86_64"]`, `["x86"]`. |
 | `dpi` | `string` | `""` | Optional DPI selector for APKMirror (e.g. `"nodpi"`, `"anydpi"`, `"120-640dpi"`). |
 
@@ -83,9 +83,9 @@ The builder attempts downloaders in priority order based on which URLs are provi
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `cli_source` | `string` | `general.default_cli_source` | Override CLI GitHub repository for this specific app. |
-| `cli_version` | `string` | `"latest"` | CLI release tag (`"latest"`, `"prerelease"`, or specific tag e.g. `"v1.14.0"`). |
+| `cli_version` | `string` | `general.default_cli_version` | CLI release strategy (`"latest"`, `"beta"`, or specific tag e.g. `"v1.14.0"`). |
 | `patches_source` | `string` | `general.default_patches_source` | Override patches GitHub repository for this specific app. |
-| `patches_version` | `string` | `"latest"` | Patch release tag (`"latest"`, `"prerelease"`, or specific tag e.g. `"v1.40.0"`). |
+| `patches_version` | `string` | `general.default_patches_version` | Patch release strategy (`"latest"`, `"beta"`, or specific tag e.g. `"v1.40.0"`). |
 
 ### Patch Rules
 
