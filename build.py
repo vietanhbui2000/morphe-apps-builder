@@ -482,17 +482,6 @@ def _get_github_repo() -> str:
     return repo
 
 
-def _get_target_stock_apk_name(t: Dict[str, Any]) -> str:
-    """Return filename of downloaded stock APK, falling back to package id pattern."""
-    path_str = t.get("stock_apk_path")
-    if path_str:
-        return Path(path_str).name
-    app_id = t.get("id") or t.get("name") or "unknown"
-    version = t.get("version") or "unknown"
-    arch = t.get("arch") or "universal"
-    return f"{app_id}_{version}_{arch}.apk"
-
-
 def write_download_summary(
     download_targets: List[Dict[str, Any]],
     failed_downloads: List[BuildResult]
@@ -531,13 +520,13 @@ def write_download_summary(
         if app_targets and not app_failures:
             icon = f"{Colors.GREEN}[✓]{Colors.RESET}"
             if is_multi:
-                parts = [f"({t.get('arch')}) {_get_target_stock_apk_name(t)}" for t in app_targets]
+                parts = [f"({t['arch']}) {Path(t['stock_apk_path']).name}" for t in app_targets]
                 print(f"{icon} {name}: {version} > {'; '.join(parts)}")
             else:
-                print(f"{icon} {name}: {version} > {_get_target_stock_apk_name(app_targets[0])}")
+                print(f"{icon} {name}: {version} > {Path(app_targets[0]['stock_apk_path']).name}")
         elif app_targets and app_failures:
             icon = f"{Colors.YELLOW}[▲]{Colors.RESET}"
-            parts = [f"({t.get('arch')}) {_get_target_stock_apk_name(t)}" for t in app_targets]
+            parts = [f"({t['arch']}) {Path(t['stock_apk_path']).name}" for t in app_targets]
             for f in app_failures:
                 err = f.error_message or "Download failed"
                 parts.append(f"({f.arch}) FAILED {{{err}}}")
