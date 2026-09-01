@@ -83,6 +83,11 @@ def check_updates(config_path: Path) -> int:
     source_latest_tags: Dict[str, str] = {}
     source_has_update: Dict[str, bool] = {}
 
+    source_target_versions: Dict[str, str] = {}
+    for a in enabled_apps:
+        source_target_versions[a.cli_source] = a.cli_version
+        source_target_versions[a.patches_source] = a.patches_version
+
     for idx, source in enumerate(all_sources, 1):
         group_start(f"Check [{idx}/{total_checks}]: {source}")
         current_tag = _extract_source_tag_from_release_md(source, prev_release_text)
@@ -90,13 +95,14 @@ def check_updates(config_path: Path) -> int:
 
         log_info(f"Current: {current_tag or 'none'}")
 
+        target_version = source_target_versions.get(source, "latest")
         latest_tag = ""
         try:
-            rel = github_client.get_release(source, "latest")
+            rel = github_client.get_release(source, target_version)
             if rel:
                 latest_tag = rel.get("tag_name", "")
         except Exception as e:
-            log_warn(f"Failed to fetch latest release for {source}: {e}")
+            log_warn(f"Failed to fetch {target_version} release for {source}: {e}")
 
         source_latest_tags[source] = latest_tag
         log_info(f"Latest: {latest_tag or 'none'}")
@@ -169,31 +175,35 @@ def resolve_app_version(
     patches_path: Path,
     dry_run: bool = False
 ) -> Optional[str]:
-    """Resolve target version for app (from config, patches compatibility list, or fallback)."""
-    if app.version != "auto":
-        log_info(f"Using explicitly configured version: {app.version}")
+    """
+    Resolve target version for app strictly from the patch bundle:
+    1. 'auto': Selects the app version from the patch bundle that supports all patches.
+    2. 'latest': Always selects the newest version of the app from the patch bundle, even if it does not support all patches.
+    3. 'beta': Selects the newest beta/pre-release compatible version from the patch bundle.
+    4. Specific version (e.g. '21.04.223'): Uses the exact pinned version.
+    """
+    if dry_run:
         return app.version
 
-    if dry_run:
-        return "auto"
+    # Mode 1, 2 & 3: 'auto', 'latest', or 'beta' (resolved strictly from patch bundle)
+    if app.version in ("auto", "latest", "beta"):
+        if cli_path.is_file() and patches_path.is_file():
+            resolved = morphe_patcher.get_compatible_version(
+                cli_path=cli_path,
+                patches_path=patches_path,
+                app_id=app.id,
+                mode=app.version
+            )
+            if resolved:
+                log_success(f"Resolved compatible version from patch bundle: {resolved}")
+                return resolved
 
-    # Try resolving from patch bundle compatibility list
-    if cli_path.is_file() and patches_path.is_file():
-        resolved = morphe_patcher.get_compatible_version(cli_path, patches_path, app.id)
-        if resolved:
-            log_success(f"Resolved compatible version from patch bundle: {resolved}")
-            return resolved
+        log_error(f"Could not find compatible version for {app.name} ({app.id}) in patch bundle")
+        return None
 
-    # Fallback to scraping first available version from download providers
-    log_warn("Version not found in patch bundle. Falling back to latest from sources...")
-    sources = get_download_sources_for_app(app)
-    for _, downloader, src_url in sources:
-        vers = downloader.get_versions(src_url)
-        if vers:
-            log_success(f"Fallback version resolved from {downloader.display_name}: {vers[0]}")
-            return vers[0]
-
-    return None
+    # Mode 4: Specific pinned version
+    log_info(f"Using explicitly configured version: {app.version}")
+    return app.version
 
 
 def download_app_targets(
@@ -296,9 +306,15 @@ def download_app_targets(
                 log_info(f"Discovered available architecture packages via {provider_name}: {', '.join(archs)}", indent=1)
                 break
 
-        # Fallback if source does not expose an architecture catalog: attempt universal
+        # If source does not expose an architecture catalog or no archs detected: FAIL
         if not available_archs:
-            available_archs = ["universal"]
+            failures.append(BuildResult(
+                name=app.name, id=app.id, version=resolved_version, arch="all",
+                success=False, error_message="Could not discover available architecture packages from sources",
+                cli_source=app.cli_source, cli_tag=cli_tag,
+                patches_source=app.patches_source, patches_tag=patches_tag
+            ))
+            return targets, failures
 
         # 2. Download and register a target for EVERY available architecture package
         for arch in available_archs:

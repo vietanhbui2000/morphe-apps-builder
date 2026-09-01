@@ -30,21 +30,55 @@ class MorphePatcher(BasePatcher):
         self,
         cli_path: Path,
         patches_path: Path,
-        app_id: str
+        app_id: str,
+        mode: str = "auto"
     ) -> Optional[str]:
-        """Query Morphe CLI to find the highest compatible version for a package."""
-        # 1. Try list-versions commands (--patches and -p)
+        """Query Morphe CLI to find the compatible version for a package from the patch bundle."""
+        cmd_prefixes = []
+        if mode == "beta":
+            for x_flag in ("-x", "--experimental"):
+                for p_flag in ("--patches", "-p"):
+                    cmd_prefixes.append([x_flag, p_flag])
         for p_flag in ("--patches", "-p"):
+            cmd_prefixes.append([p_flag])
+
+        # 1. Try list-versions commands
+        for flags in cmd_prefixes:
             cmd = [
                 "java", "-jar", str(cli_path),
                 "list-versions",
-                p_flag, str(patches_path),
+                *flags, str(patches_path),
                 "-f", app_id
             ]
             try:
                 res = subprocess.run(cmd, capture_output=True, text=True, check=False)
                 if res.returncode == 0 and res.stdout:
-                    matches = re.findall(r"(\d+(\.\d+)+)", res.stdout)
+                    stdout = res.stdout
+
+                    # If mode is auto, prefer "Most common compatible versions" (supporting all/most patches)
+                    if mode == "auto" and "Most common compatible versions:" in stdout:
+                        lines = stdout.split("Most common compatible versions:", 1)[1].splitlines()
+                        common_versions = []
+                        max_pcount = None
+                        for line in lines:
+                            line_s = line.strip()
+                            if not line_s or line_s.startswith("Index:") or ":" in line_s:
+                                break
+                            m = re.match(r"^(\d+(?:\.\d+)+)(?:\s*\(\s*(\d+)\s*(?:patch|patches)?\s*\))?", line_s)
+                            if m:
+                                ver = m.group(1)
+                                count = int(m.group(2)) if m.group(2) else 1
+                                if max_pcount is None:
+                                    max_pcount = count
+                                if count >= max_pcount:
+                                    common_versions.append(ver)
+
+                        if common_versions:
+                            common_versions.sort(key=_version_key, reverse=True)
+                            return common_versions[0]
+
+                    # For "latest", "beta", or fallback if no "Most common" section:
+                    matches = re.findall(r"(\d+(\.\d+)+)", stdout)
                     if matches:
                         versions = sorted({m[0] for m in matches}, key=_version_key, reverse=True)
                         return versions[0]
@@ -52,17 +86,26 @@ class MorphePatcher(BasePatcher):
                 pass
 
         # 2. Fallback to list-patches commands
-        for cmd_list_patches in (
+        list_patches_variants = []
+        if mode == "beta":
+            list_patches_variants.extend([
+                ["java", "-jar", str(cli_path), "list-patches", "-x", "-p", str(patches_path), "-f", app_id, "--with-packages", "--with-versions"],
+                ["java", "-jar", str(cli_path), "list-patches", "--experimental", "-p", str(patches_path), "-f", app_id, "--with-packages", "--with-versions"],
+            ])
+        list_patches_variants.extend([
             ["java", "-jar", str(cli_path), "list-patches", "-p", str(patches_path), "-f", app_id, "--with-packages", "--with-versions"],
             ["java", "-jar", str(cli_path), "list-patches", "-p", str(patches_path), "--with-packages", "--with-versions"],
-        ):
+        ])
+
+        for cmd_list_patches in list_patches_variants:
             try:
                 res = subprocess.run(cmd_list_patches, capture_output=True, text=True, check=False)
                 if res.returncode == 0 and res.stdout:
                     lines = res.stdout.splitlines()
                     found_pkg = False
                     in_versions = False
-                    compatible_versions = []
+                    version_counts: Dict[str, int] = {}
+                    all_versions: List[str] = []
 
                     for line in lines:
                         line_s = line.strip()
@@ -78,11 +121,19 @@ class MorphePatcher(BasePatcher):
                             else:
                                 ver_match = re.match(r"^(\d+(\.\d+)+)", line_s)
                                 if ver_match:
-                                    compatible_versions.append(ver_match.group(1))
+                                    ver = ver_match.group(1)
+                                    version_counts[ver] = version_counts.get(ver, 0) + 1
+                                    all_versions.append(ver)
 
-                    if compatible_versions:
-                        compatible_versions = sorted(set(compatible_versions), key=_version_key, reverse=True)
-                        return compatible_versions[0]
+                    if mode == "auto" and version_counts:
+                        max_c = max(version_counts.values())
+                        top = [v for v, c in version_counts.items() if c == max_c]
+                        top.sort(key=_version_key, reverse=True)
+                        return top[0]
+
+                    if all_versions:
+                        all_versions = sorted(set(all_versions), key=_version_key, reverse=True)
+                        return all_versions[0]
             except Exception:
                 pass
 

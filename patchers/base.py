@@ -20,9 +20,10 @@ class BasePatcher(ABC):
         self,
         cli_path: Path,
         patches_path: Path,
-        app_id: str
+        app_id: str,
+        mode: str = "auto"
     ) -> Optional[str]:
-        """Query patch bundle to find the latest supported version for a package."""
+        """Query patch bundle to find compatible version ('auto' for all patches, 'latest' for newest, 'beta' for beta/pre-release)."""
         pass
 
     @abstractmethod
