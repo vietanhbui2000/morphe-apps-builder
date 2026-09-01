@@ -70,10 +70,10 @@ def check_updates(config_path: Path) -> int:
 
     log_stage("Checking for Upstream Updates")
 
-    unique_cli_sources = list(dict.fromkeys(a.cli_source for a in enabled_apps))
-    unique_patches_sources = list(dict.fromkeys(a.patches_source for a in enabled_apps))
-
-    all_sources = list(dict.fromkeys(unique_cli_sources + unique_patches_sources))
+    # CLI sources first, then patches sources, deduplicated and order-preserving
+    all_sources = list(dict.fromkeys(
+        [a.cli_source for a in enabled_apps] + [a.patches_source for a in enabled_apps]
+    ))
     total_checks = len(all_sources)
 
     release_md_path = ROOT_DIR / "RELEASE.md"
@@ -716,6 +716,9 @@ def main() -> int:
 
     general, apps = load_config(config_path)
 
+    # Build a full map before any filtering so --patch-only can resolve all app names from the manifest
+    apps_map = {a.name: a for a in apps}
+
     # Filter apps if --app specified (supports comma-separated list)
     if args.app:
         target_names = {x.strip().lower() for x in args.app.split(",") if x.strip()}
@@ -728,8 +731,6 @@ def main() -> int:
     if not enabled_apps:
         log_warn("No enabled apps found in configuration.")
         return 0
-
-    apps_map = {a.name: a for a in apps}
 
     # --------------------------------------------------------------------------
     # PHASE 1: DOWNLOAD PHASE
