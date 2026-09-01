@@ -187,10 +187,10 @@ def resolve_app_version(
     # Fallback to scraping first available version from download providers
     log_warn("Version not found in patch bundle. Falling back to latest from sources...", indent=1)
     sources = get_download_sources_for_app(app)
-    for _, dl_inst, src_url in sources:
-        vers = dl_inst.get_versions(src_url)
+    for _, downloader, src_url in sources:
+        vers = downloader.get_versions(src_url)
         if vers:
-            log_success(f"Fallback version resolved from {dl_inst.display_name}: {vers[0]}", indent=1)
+            log_success(f"Fallback version resolved from {downloader.display_name}: {vers[0]}", indent=1)
             return vers[0]
 
     return None
@@ -217,58 +217,38 @@ def download_single_target(
 
     if dry_run:
         log_info(f"[DRY-RUN] Would download {app.name} v{resolved_version} ({arch})", indent=1)
-        target_info = {
-            "name": app.name,
-            "id": app.id,
-            "version": resolved_version,
-            "cli_source": app.cli_source,
-            "cli_version": app.cli_version,
-            "cli_tag": cli_tag,
-            "cli_path": str(cli_path),
-            "patches_source": app.patches_source,
-            "patches_version": app.patches_version,
-            "patches_tag": patches_tag,
-            "patches_path": str(patches_path),
-            "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_{arch}.apk"),
-        }
-        if arch == "all":
-            return [
-                {**target_info, "arch": "universal", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_universal.apk")},
-                {**target_info, "arch": "arm64-v8a", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_arm64-v8a.apk")},
-                {**target_info, "arch": "armeabi-v7a", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_armeabi-v7a.apk")},
-            ], None
-        return [{**target_info, "arch": arch}], None
+        downloaded_file = APKS_DIR / f"{app.id}_{resolved_version}_{arch}.apk"
+    else:
+        sources = get_download_sources_for_app(app)
+        if not sources:
+            return [], "No download sources configured in config.toml"
 
-    sources = get_download_sources_for_app(app)
-    if not sources:
-        return [], "No download sources configured in config.toml"
+        APKS_DIR.mkdir(parents=True, exist_ok=True)
+        stock_apk_base = APKS_DIR / f"{app.id}_{resolved_version}_{arch}"
+        downloaded_file: Optional[Path] = None
 
-    APKS_DIR.mkdir(parents=True, exist_ok=True)
-    stock_apk_base = APKS_DIR / f"{app.id}_{resolved_version}_{arch}"
-    downloaded_file: Optional[Path] = None
+        download_arch_query = "universal" if arch == "all" else arch
+        for provider_name, downloader, src_url in sources:
+            log_info(f"Attempting download via {provider_name}...", indent=1)
+            try:
+                downloaded_file = downloader.download(
+                    url=src_url,
+                    version=resolved_version,
+                    arch=download_arch_query,
+                    dpi=app.dpi,
+                    output_path=stock_apk_base,
+                    app_id=app.id
+                )
+                if downloaded_file and downloaded_file.is_file() and downloaded_file.stat().st_size > 0:
+                    log_success(f"Downloaded {downloaded_file.name} via {provider_name}", indent=1)
+                    break
+                else:
+                    log_warn(f"Provider {provider_name} returned no file, trying next...", indent=1)
+            except Exception as e:
+                log_warn(f"Provider {provider_name} failed: {e}", indent=1)
 
-    download_arch_query = "universal" if arch == "all" else arch
-    for provider_name, dl_inst, src_url in sources:
-        log_info(f"Attempting download via {provider_name}...", indent=1)
-        try:
-            downloaded_file = dl_inst.download(
-                url=src_url,
-                version=resolved_version,
-                arch=download_arch_query,
-                dpi=app.dpi,
-                output_path=stock_apk_base,
-                app_id=app.id
-            )
-            if downloaded_file and downloaded_file.is_file() and downloaded_file.stat().st_size > 0:
-                log_success(f"Downloaded {downloaded_file.name} via {provider_name}", indent=1)
-                break
-            else:
-                log_warn(f"Provider {provider_name} returned no file, trying next...", indent=1)
-        except Exception as e:
-            log_warn(f"Provider {provider_name} failed: {e}", indent=1)
-
-    if not downloaded_file or not downloaded_file.is_file():
-        return [], "All download providers failed"
+        if not downloaded_file or not downloaded_file.is_file():
+            return [], "All download providers failed"
 
     target_info = {
         "name": app.name,
@@ -286,6 +266,12 @@ def download_single_target(
     }
 
     if arch == "all":
+        if dry_run:
+            return [
+                {**target_info, "arch": "universal", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_universal.apk")},
+                {**target_info, "arch": "arm64-v8a", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_arm64-v8a.apk")},
+                {**target_info, "arch": "armeabi-v7a", "stock_apk_path": str(APKS_DIR / f"{app.id}_{resolved_version}_armeabi-v7a.apk")},
+            ], None
         # Inspect native ABIs inside the downloaded APK / bundle
         detected_abis = get_apk_architectures(downloaded_file)
         if detected_abis:
@@ -487,6 +473,13 @@ def _get_github_repo() -> str:
     return repo
 
 
+def _format_version(v: Optional[str]) -> str:
+    """Format version string ensuring consistent 'v' prefix, defaulting to 'vauto'."""
+    if not v:
+        return "vauto"
+    return v if v.startswith("v") else f"v{v}"
+
+
 def write_download_summary(
     download_targets: List[Dict[str, Any]],
     failed_downloads: List[BuildResult]
@@ -503,8 +496,8 @@ def write_download_summary(
             grouped_success.setdefault(name, []).append(t)
 
     grouped_failed: Dict[str, List[BuildResult]] = {}
-    for f in failed_downloads:
-        grouped_failed.setdefault(f.name, []).append(f)
+    for r in failed_downloads:
+        grouped_failed.setdefault(r.name, []).append(r)
 
     all_app_names = list(dict.fromkeys(list(grouped_success.keys()) + list(grouped_failed.keys())))
 
@@ -517,7 +510,7 @@ def write_download_summary(
             v_raw = app_targets[0].get("version", "")
         elif app_failures:
             v_raw = app_failures[0].version
-        version = f"v{v_raw}" if v_raw and not v_raw.startswith("v") else (v_raw or "vauto")
+        version = _format_version(v_raw)
 
         total_targets = len(app_targets) + len(app_failures)
         is_multi = total_targets > 1
@@ -532,14 +525,14 @@ def write_download_summary(
         elif app_targets and app_failures:
             icon = f"{Colors.YELLOW}[▲]{Colors.RESET}"
             parts = [f"({t['arch']}) {Path(t['stock_apk_path']).name}" for t in app_targets]
-            for f in app_failures:
-                err = f.error_message or "Download failed"
-                parts.append(f"({f.arch}) FAILED {{{err}}}")
+            for r in app_failures:
+                err = r.error_message or "Download failed"
+                parts.append(f"({r.arch}) FAILED {{{err}}}")
             print(f"{icon} {name}: {version} > {'; '.join(parts)}")
         else:
             icon = f"{Colors.RED}[✗]{Colors.RESET}"
             if is_multi:
-                parts = [f"({f.arch}) FAILED {{{f.error_message or 'Download failed'}}}" for f in app_failures]
+                parts = [f"({r.arch}) FAILED {{{r.error_message or 'Download failed'}}}" for r in app_failures]
                 print(f"{icon} {name}: {version} > {'; '.join(parts)}")
             else:
                 err = app_failures[0].error_message if app_failures else "Download failed"
@@ -569,7 +562,7 @@ def write_patch_summary(results: List[BuildResult]) -> int:
 
         first_r = app_results[0]
         v_raw = first_r.version
-        version = f"v{v_raw}" if v_raw and not v_raw.startswith("v") else (v_raw or "vauto")
+        version = _format_version(v_raw)
 
         cli_tag = first_r.cli_tag or "latest"
         patches_tag = first_r.patches_tag or "latest"
@@ -622,14 +615,14 @@ def write_patch_summary(results: List[BuildResult]) -> int:
         target_links = []
         is_multi = len(success_results) > 1
         for r in success_results:
-            r_ver = f"v{r.version}" if not r.version.startswith("v") else r.version
+            version = _format_version(r.version)
             if is_multi or r.arch not in ("all", "universal", ""):
-                label = f"{r_ver} ({r.arch})"
+                label = f"{version} ({r.arch})"
             else:
-                label = r_ver
+                label = version
 
             if repo and release_tag:
-                apk_name = r.output_path.name if r.output_path else f"{r.name}_{r_ver}{'' if r.arch in ('all', 'universal', '') else f'_{r.arch}'}.apk"
+                apk_name = r.output_path.name if r.output_path else f"{r.name}_{version}{'' if r.arch in ('all', 'universal', '') else f'_{r.arch}'}.apk"
                 dl_url = f"https://github.com/{repo}/releases/download/{release_tag}/{apk_name}"
                 target_links.append(f"[{label}]({dl_url})")
             else:
