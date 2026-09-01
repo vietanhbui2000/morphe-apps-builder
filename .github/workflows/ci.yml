@@ -21,6 +21,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     outputs:
       should_build: ${{ steps.check_step.outputs.SHOULD_BUILD }}
+      apps_to_build: ${{ steps.check_step.outputs.APPS_TO_BUILD }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
@@ -43,15 +44,19 @@ jobs:
       - name: Check for Updates
         id: check_step
         run: |
-          if [ "${{ github.event_name }}" == "push" ] || [ ! -f "RELEASE.md" ]; then
+          if [ "${{ github.event_name }}" == "push" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ] || [ ! -f "RELEASE.md" ]; then
             echo "SHOULD_BUILD=1" >> "$GITHUB_OUTPUT"
+            echo "APPS_TO_BUILD=" >> "$GITHUB_OUTPUT"
           else
             OUTPUT=$(python build.py --check-updates)
             echo "$OUTPUT"
             if echo "$OUTPUT" | grep -q "SHOULD_BUILD=1"; then
               echo "SHOULD_BUILD=1" >> "$GITHUB_OUTPUT"
+              APPS=$(echo "$OUTPUT" | grep "^APPS_TO_BUILD=" | head -n1 | cut -d= -f2-)
+              echo "APPS_TO_BUILD=$APPS" >> "$GITHUB_OUTPUT"
             else
               echo "SHOULD_BUILD=0" >> "$GITHUB_OUTPUT"
+              echo "APPS_TO_BUILD=" >> "$GITHUB_OUTPUT"
             fi
           fi
 
@@ -66,3 +71,5 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/build.yml
+    with:
+      apps: ${{ needs.check.outputs.apps_to_build }}

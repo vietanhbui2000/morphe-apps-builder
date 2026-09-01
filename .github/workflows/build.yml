@@ -2,7 +2,19 @@ name: Build APKs
 
 on:
   workflow_call:
+    inputs:
+      apps:
+        description: "Comma-separated list of app section names to build (empty builds all)"
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
+    inputs:
+      apps:
+        description: "Comma-separated list of app section names to build (empty builds all)"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   build:
@@ -47,7 +59,12 @@ jobs:
           done
 
       - name: Download Prebuilts & Stock APKs
-        run: python build.py --download-only
+        run: |
+          if [ -n "${{ inputs.apps }}" ]; then
+            python build.py --download-only --app "${{ inputs.apps }}"
+          else
+            python build.py --download-only
+          fi
 
       - name: Stop FlareSolverr Service
         if: always()
