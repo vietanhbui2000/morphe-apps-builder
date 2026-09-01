@@ -131,9 +131,9 @@ class GitHubClient:
         cli_dir: Path,
         patches_dir: Optional[Path] = None
     ) -> Tuple[str, Optional[Path], str, Optional[Path]]:
-        p_dir = patches_dir or cli_dir
+        actual_patches_dir = patches_dir or cli_dir
         cli_dir.mkdir(parents=True, exist_ok=True)
-        p_dir.mkdir(parents=True, exist_ok=True)
+        actual_patches_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. CLI
         cli_rel = self.get_release(cli_source, cli_version)
@@ -187,7 +187,7 @@ class GitHubClient:
 
         ext = ".mpp" if patches_asset["name"].endswith(".mpp") else ".jar"
         safe_patches_source = patches_source.replace("/", "_")
-        patches_path = p_dir / f"{safe_patches_source}_{patches_tag}{ext}"
+        patches_path = actual_patches_dir / f"{safe_patches_source}_{patches_tag}{ext}"
         patches_owner = patches_source.split("/")[0]
         patches_display = f"{patches_owner}_{patches_asset['name']}"
         if not self.download_asset(patches_asset, patches_path, display_name=patches_display):
