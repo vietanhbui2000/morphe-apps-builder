@@ -47,9 +47,10 @@ pip install -r requirements.txt
   python build.py
   ```
 
-- **Build a single app**:
+- **Build specific app(s)**:
   ```bash
   python build.py --app YouTube
+  python build.py --app "YouTube,1.1.1.1"
   ```
 
 - **Download stock APKs & prebuilts only**:
