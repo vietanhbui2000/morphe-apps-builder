@@ -29,7 +29,7 @@ class BasePatcher(ABC):
     def patch(
         self,
         cli_path: Path,
-        patches_paths: list[Path],
+        patches_path: Path,
         stock_apk_path: Path,
         output_path: Path,
         app_config: AppConfig,

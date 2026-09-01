@@ -128,7 +128,7 @@ class MorphePatcher(BasePatcher):
     def patch(
         self,
         cli_path: Path,
-        patches_paths: list[Path],
+        patches_path: Path,
         stock_apk_path: Path,
         output_path: Path,
         app_config: AppConfig,
@@ -138,15 +138,13 @@ class MorphePatcher(BasePatcher):
     ) -> bool:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         temp_dir = Path(tempfile.mkdtemp(prefix="morphe_patch_"))
-        options_file = temp_dir / "options.json"
+        options_path = temp_dir / "options.json"
 
         cmd = [
             "java", "-jar", str(cli_path),
-            "patch"
+            "patch",
+            "-p", str(patches_path)
         ]
-
-        for pf in patches_paths:
-            cmd.extend(["-p", str(pf)])
 
         if app_config.exclusive_patches:
             cmd.append("--exclusive")
@@ -160,14 +158,13 @@ class MorphePatcher(BasePatcher):
         if app_config.patcher_args:
             cmd.extend(shlex.split(app_config.patcher_args))
 
-        if app_config.options and self._build_options_json(app_config.options, options_file):
-            cmd.extend(["--options-file", str(options_file)])
+        if app_config.options and self._build_options_json(app_config.options, options_path):
+            cmd.extend(["--options-file", str(options_path)])
 
         if keystore_path.is_file():
             cmd.extend([
                 "--keystore", str(keystore_path),
                 "--keystore-entry-alias", keystore_alias,
-                "--signer", keystore_alias,
                 "--keystore-password", keystore_password,
                 "--keystore-entry-password", keystore_password,
             ])

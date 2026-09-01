@@ -97,6 +97,32 @@ class HttpClient:
             log_warn(f"FlareSolverr solve error: {e}", indent=2)
         return None
 
+    def get_flaresolverr_cookies(self, url: str) -> Tuple[Dict[str, str], str]:
+        """Query FlareSolverr and return (cookies_dict, user_agent)."""
+        payload = json.dumps({
+            "cmd": "request.get",
+            "url": url,
+            "maxTimeout": 60000,
+            "returnOnlyCookies": True
+        }).encode("utf-8")
+        try:
+            req = urllib.request.Request(
+                self.flaresolverr_url,
+                data=payload,
+                headers={"Content-Type": "application/json", "User-Agent": self.user_agent}
+            )
+            with urllib.request.urlopen(req, timeout=70) as resp:
+                if resp.status == 200:
+                    data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                    if data.get("status") == "ok":
+                        solution = data.get("solution", {})
+                        cookies = {c["name"]: c["value"] for c in solution.get("cookies", []) if "name" in c and "value" in c}
+                        ua = solution.get("userAgent", "")
+                        return cookies, ua
+        except Exception as e:
+            log_warn(f"FlareSolverr cookie extraction error: {e}", indent=2)
+        return {}, ""
+
     def _solve_with_cfb(self, url: str) -> Optional[str]:
         try:
             target = f"{self.cfb_url}?url={urllib.parse.quote(url)}"

@@ -20,40 +20,23 @@ except ImportError:
 from core.models import AppConfig, GeneralConfig
 
 def _parse_patches_list(raw: Any) -> list[str]:
-    """Parse patch lists that may be a list of strings or a single string containing quoted patches."""
+    """Parse patch lists into a clean list of strings."""
     if isinstance(raw, list):
         return [str(p).strip() for p in raw if str(p).strip()]
-    if isinstance(raw, str):
-        # Match single-quoted or double-quoted items or words
-        matches = re.findall(r"'([^']*)'|\"([^\"]*)\"|(\S+)", raw)
-        patches = []
-        for m in matches:
-            val = m[0] or m[1] or m[2]
-            if val.strip():
-                patches.append(val.strip())
-        return patches
+    if isinstance(raw, str) and raw.strip():
+        return [raw.strip()]
     return []
 
 def _normalize_arch(raw: Any) -> list[str]:
     """Normalize arch option to a list of target architectures."""
     if isinstance(raw, list):
-        archs: list[str] = []
-        for a in raw:
-            s = str(a).strip()
-            if s == "both":
-                archs.extend(["arm64-v8a", "armeabi-v7a"])
-            elif s:
-                archs.append(s)
+        archs = [str(a).strip() for a in raw if str(a).strip()]
         if "all" in archs:
             return ["all"]
         return archs or ["universal"]
-    if isinstance(raw, str):
+    if isinstance(raw, str) and raw.strip():
         s = raw.strip()
-        if s == "all":
-            return ["all"]
-        if s == "both":
-            return ["arm64-v8a", "armeabi-v7a"]
-        return [s] if s else ["universal"]
+        return ["all"] if s == "all" else [s]
     return ["universal"]
 
 def load_config(config_path: Path) -> Tuple[GeneralConfig, list[AppConfig]]:

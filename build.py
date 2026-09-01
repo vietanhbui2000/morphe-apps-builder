@@ -39,7 +39,7 @@ DOWNLOADS_DIR = TEMP_DIR / "downloads"
 APKS_DIR = DOWNLOADS_DIR / "apks"
 CLI_DIR = DOWNLOADS_DIR / "cli"
 PATCHES_DIR = DOWNLOADS_DIR / "patches"
-MANIFEST_FILE = DOWNLOADS_DIR / "targets_manifest.json"
+MANIFEST_PATH = DOWNLOADS_DIR / "targets_manifest.json"
 
 
 def clean_workspace():
@@ -48,9 +48,9 @@ def clean_workspace():
     for directory in (TEMP_DIR, OUTPUT_DIR):
         if directory.is_dir():
             shutil.rmtree(directory, ignore_errors=True)
-    release_md = ROOT_DIR / "RELEASE.md"
-    if release_md.is_file():
-        release_md.unlink(missing_ok=True)
+    release_md_path = ROOT_DIR / "RELEASE.md"
+    if release_md_path.is_file():
+        release_md_path.unlink(missing_ok=True)
     log_success("Workspace cleaned.")
 
 
@@ -73,11 +73,11 @@ def check_updates(config_path: Path) -> int:
     unique_cli_sources = list(dict.fromkeys(a.cli_source for a in enabled_apps))
     unique_patches_sources = list(dict.fromkeys(a.patches_source for a in enabled_apps))
 
-    all_sources = unique_cli_sources + unique_patches_sources
+    all_sources = list(dict.fromkeys(unique_cli_sources + unique_patches_sources))
     total_checks = len(all_sources)
 
-    release_md = ROOT_DIR / "RELEASE.md"
-    prev_release_text = release_md.read_text(encoding="utf-8") if release_md.is_file() else ""
+    release_md_path = ROOT_DIR / "RELEASE.md"
+    prev_release_text = release_md_path.read_text(encoding="utf-8") if release_md_path.is_file() else ""
 
     source_current_tags: Dict[str, str] = {}
     source_latest_tags: Dict[str, str] = {}
@@ -88,21 +88,26 @@ def check_updates(config_path: Path) -> int:
         current_tag = _extract_source_tag_from_release_md(source, prev_release_text)
         source_current_tags[source] = current_tag
 
-        rel = github_client.get_release(source, "latest")
-        latest_tag = rel.get("tag_name", "") if rel else ""
+        log_info(f"Current: {current_tag or 'none'}")
+
+        latest_tag = ""
+        try:
+            rel = github_client.get_release(source, "latest")
+            if rel:
+                latest_tag = rel.get("tag_name", "")
+        except Exception as e:
+            log_warn(f"Failed to fetch latest release for {source}: {e}")
+
         source_latest_tags[source] = latest_tag
+        log_info(f"Latest: {latest_tag or 'none'}")
 
-        log_info(f"Current: {current_tag or 'none'}", indent=1)
-        log_info(f"Latest: {latest_tag or 'unknown'}", indent=1)
-
-        has_update = bool(latest_tag and latest_tag != current_tag) if prev_release_text else True
+        has_update = bool(latest_tag and (not current_tag or current_tag != latest_tag))
         source_has_update[source] = has_update
 
         if has_update:
-            log_success("Updates available.", indent=1)
+            log_success("Updates available.")
         else:
-            log_info("Up to date.", indent=1)
-
+            log_info("Up to date.")
         group_end()
 
     # Determine which apps need to be built
@@ -144,9 +149,9 @@ def check_updates(config_path: Path) -> int:
                 print(f"{source}: {lat or cur or 'unknown'}")
 
         print("> Apps")
-        for app_name, reason_str in app_summary_rows:
+        for name, reason_str in app_summary_rows:
             icon = f"{Colors.YELLOW}[~]{Colors.RESET}"
-            print(f"{icon} {app_name}: [{reason_str}] > TO BUILD")
+            print(f"{icon} {name}: [{reason_str}] > TO BUILD")
 
         print("SHOULD_BUILD=1")
         print(f"APPS_TO_BUILD={','.join(apps_to_build)}")
@@ -188,7 +193,7 @@ def resolve_app_version(
             log_success(f"Fallback version resolved from {dl_inst.display_name}: {vers[0]}", indent=1)
             return vers[0]
 
-    return "auto" if dry_run else None
+    return None
 
 
 def download_single_target(
@@ -329,15 +334,15 @@ def patch_single_target(
             patches_tag=patches_tag,
         )
 
-    downloaded_file = Path(target_info.get("stock_apk_path", target_info.get("stock_apk", "")))
-    if not downloaded_file.is_file():
+    downloaded_apk_path = Path(target_info.get("stock_apk_path", ""))
+    if not downloaded_apk_path.is_file():
         return BuildResult(
             name=name,
             id=app.id,
             version=version,
             arch=arch,
             success=False,
-            error_message=f"Stock APK not found at {downloaded_file}",
+            error_message=f"Stock APK not found at {downloaded_apk_path}",
             cli_source=cli_source,
             cli_tag=cli_tag,
             patches_source=patches_source,
@@ -346,56 +351,56 @@ def patch_single_target(
 
     # 1. Ensure Keystore & Merge if Bundle
     stock_apk_path: Path
-    stock_apk_base = APKS_DIR / f"{app.id}_{version}_{arch}"
     keystore_path = ROOT_DIR / general.keystore
     ensure_keystore(keystore_path, general.keystore_alias, general.keystore_password)
 
-    if downloaded_file.suffix in (".apkm", ".xapk") or "bundle" in downloaded_file.name:
-        merged_apk = stock_apk_base.parent / f"{stock_apk_base.name}.merged.apk"
-        log_info(f"Merging split bundle {downloaded_file.name} to standalone APK...", indent=1)
-        if not merge_bundle(
-            bundle_path=downloaded_file,
-            output_path=merged_apk,
-            keystore_path=keystore_path,
-            keystore_alias=general.keystore_alias,
-            keystore_password=general.keystore_password,
-        ):
-            return BuildResult(
-                name=name,
-                id=app.id,
-                version=version,
-                arch=arch,
-                success=False,
-                error_message="Failed to merge split APK bundle",
-                cli_source=cli_source,
-                cli_tag=cli_tag,
-                patches_source=patches_source,
-                patches_tag=patches_tag,
-            )
-        stock_apk_path = merged_apk
+    if downloaded_apk_path.suffix in (".apkm", ".xapk"):
+        merged_apk_path = downloaded_apk_path.with_suffix(".merged.apk")
+        if not merged_apk_path.is_file():
+            log_info(f"Merging split bundle {downloaded_apk_path.name} to standalone APK...", indent=1)
+            if not merge_bundle(
+                bundle_path=downloaded_apk_path,
+                output_path=merged_apk_path,
+                keystore_path=keystore_path,
+                keystore_alias=general.keystore_alias,
+                keystore_password=general.keystore_password,
+            ):
+                return BuildResult(
+                    name=name,
+                    id=app.id,
+                    version=version,
+                    arch=arch,
+                    success=False,
+                    error_message="Failed to merge split APK bundle",
+                    cli_source=cli_source,
+                    cli_tag=cli_tag,
+                    patches_source=patches_source,
+                    patches_tag=patches_tag,
+                )
+        stock_apk_path = merged_apk_path
     else:
-        stock_apk_path = downloaded_file
+        stock_apk_path = downloaded_apk_path
 
     # 2. Patching
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     arch_suffix = "" if arch in ("all", "universal", "") else f"_{arch}"
     final_apk_name = f"{name}_v{version}{arch_suffix}.apk"
     output_path = OUTPUT_DIR / final_apk_name
-    temp_patched = TEMP_DIR / f"patched_{final_apk_name}"
+    temp_patched_path = TEMP_DIR / f"patched_{final_apk_name}"
 
     log_info(f"Applying patches for {name}...", indent=1)
     patch_success = morphe_patcher.patch(
         cli_path=cli_path,
-        patches_paths=[patches_path],
+        patches_path=patches_path,
         stock_apk_path=stock_apk_path,
-        output_path=temp_patched,
+        output_path=temp_patched_path,
         app_config=app,
         keystore_path=keystore_path,
         keystore_alias=general.keystore_alias,
         keystore_password=general.keystore_password,
     )
 
-    if not patch_success or not temp_patched.is_file():
+    if not patch_success or not temp_patched_path.is_file():
         return BuildResult(
             name=name,
             id=app.id,
@@ -412,13 +417,13 @@ def patch_single_target(
     # 3. Native Architecture Stripping & Signing
     if arch not in ("all", "universal", ""):
         log_info(f"Filtering native libraries for {arch}...", indent=1)
-        stripped_apk = TEMP_DIR / f"stripped_{final_apk_name}"
-        if strip_archs(temp_patched, arch, stripped_apk):
-            temp_patched = stripped_apk
+        stripped_apk_path = TEMP_DIR / f"stripped_{final_apk_name}"
+        if strip_archs(temp_patched_path, arch, stripped_apk_path):
+            temp_patched_path = stripped_apk_path
 
     log_info("Signing release APK...", indent=1)
     if not sign_apk(
-        apk_path=temp_patched,
+        apk_path=temp_patched_path,
         keystore_path=keystore_path,
         keystore_alias=general.keystore_alias,
         keystore_password=general.keystore_password,
@@ -454,15 +459,15 @@ def patch_single_target(
 
 def save_manifest(targets: List[Dict[str, Any]]):
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    MANIFEST_FILE.write_text(json.dumps(targets, indent=2), encoding="utf-8")
-    log_success(f"Saved download targets manifest to {MANIFEST_FILE.name}")
+    MANIFEST_PATH.write_text(json.dumps(targets, indent=2), encoding="utf-8")
+    log_success(f"Saved download targets manifest to {MANIFEST_PATH.name}")
 
 
 def load_manifest() -> List[Dict[str, Any]]:
-    if not MANIFEST_FILE.is_file():
+    if not MANIFEST_PATH.is_file():
         return []
     try:
-        return json.loads(MANIFEST_FILE.read_text(encoding="utf-8"))
+        return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     except Exception:
         return []
 
@@ -601,7 +606,7 @@ def write_patch_summary(results: List[BuildResult]) -> int:
                 print(f"{icon} {name}: {version} [{recipe_str}] > FAILED {{{err}}}")
 
     # Write RELEASE.md for GitHub Releases
-    release_md = ROOT_DIR / "RELEASE.md"
+    release_md_path = ROOT_DIR / "RELEASE.md"
     repo = _get_github_repo()
     release_tag = os.environ.get("RELEASE_TAG", "").strip()
 
@@ -647,8 +652,8 @@ def write_patch_summary(results: List[BuildResult]) -> int:
     existing_apps: Dict[str, str] = {}
     existing_sources: Dict[str, str] = {}
 
-    if release_md.is_file():
-        prev_content = release_md.read_text(encoding="utf-8")
+    if release_md_path.is_file():
+        prev_content = release_md_path.read_text(encoding="utf-8")
         if "---" in prev_content:
             apps_part, sources_part = prev_content.split("---", 1)
         else:
@@ -684,8 +689,8 @@ def write_patch_summary(results: List[BuildResult]) -> int:
         source_lines_str = "\n".join(existing_sources.values())
         sections.append(f"---\n\n{source_lines_str}")
 
-    release_md.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
-    log_success(f"Wrote release notes to {release_md.name}")
+    release_md_path.write_text("\n\n".join(sections) + "\n", encoding="utf-8")
+    log_success(f"Wrote release notes to {release_md_path.name}")
 
     return 0 if any(r.success for r in results) else 1
 
@@ -875,7 +880,7 @@ def main() -> int:
 
         group_end()
 
-    all_results = failed_downloads + results if not args.patch_only else results
+    all_results = failed_downloads + results
     return write_patch_summary(all_results)
 
 
