@@ -46,8 +46,7 @@ class MorphePatcher(BasePatcher):
                 if res.returncode == 0 and res.stdout:
                     matches = re.findall(r"(\d+(\.\d+)+)", res.stdout)
                     if matches:
-                        versions = list(set([m[0] for m in matches]))
-                        versions.sort(key=_version_key, reverse=True)
+                        versions = sorted({m[0] for m in matches}, key=_version_key, reverse=True)
                         return versions[0]
             except Exception:
                 pass
@@ -82,8 +81,7 @@ class MorphePatcher(BasePatcher):
                                     compatible_versions.append(ver_match.group(1))
 
                     if compatible_versions:
-                        compatible_versions = list(set(compatible_versions))
-                        compatible_versions.sort(key=_version_key, reverse=True)
+                        compatible_versions = sorted(set(compatible_versions), key=_version_key, reverse=True)
                         return compatible_versions[0]
             except Exception:
                 pass

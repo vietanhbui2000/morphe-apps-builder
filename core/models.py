@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
+
 @dataclass
 class GeneralConfig:
     keystore: str = "keystore.keystore"
@@ -16,6 +17,7 @@ class GeneralConfig:
     default_cli_version: str = "latest"
     default_patches_source: str = "MorpheApp/morphe-patches"
     default_patches_version: str = "latest"
+
 
 @dataclass
 class AppConfig:
@@ -41,6 +43,7 @@ class AppConfig:
     excluded_patches: list[str] = field(default_factory=list)
     patcher_args: str = ""
     options: dict[str, dict[str, Any]] = field(default_factory=dict)
+
 
 @dataclass
 class BuildResult:
