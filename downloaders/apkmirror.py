@@ -294,15 +294,13 @@ class APKMirrorDownloader(BaseDownloader):
             v_text = v["text"]
             v_type = v["type"]
 
-            # 1. Arch score (0 = exact/universal match, 1 = bundle fallback, 2 = other arch, 99 = no match)
+            # 1. Arch score (0 = exact/universal match, 1 = bundle match, 99 = no match)
             arch_score = 99
             if target_arch in ("universal", ""):
                 if any(x in v_text for x in ("universal", "noarch", "arm64-v8a + armeabi-v7a", "arm64-v8a + arm-v7a")):
                     arch_score = 0
                 elif v_type == "BUNDLE":
                     arch_score = 1
-                elif any(a in v_text for a in ("arm64-v8a", "armeabi-v7a", "arm-v7a")):
-                    arch_score = 2
             elif target_arch == "all":
                 arch_score = 0
             elif target_arch in ("arm64-v8a+armeabi-v7a", "arm64-v8a + armeabi-v7a"):
@@ -342,7 +340,12 @@ class APKMirrorDownloader(BaseDownloader):
 
             return (arch_score, dpi_score, type_score)
 
-        sorted_variants = sorted(variants, key=score_variant)
+        valid_variants = [v for v in variants if score_variant(v)[0] < 90]
+        if not valid_variants:
+            log_warn(f"[APKMirror] No variant matching architecture '{target_arch}' found", indent=2)
+            return None
+
+        sorted_variants = sorted(valid_variants, key=score_variant)
         matched_variant = sorted_variants[0]
 
         is_bundle = (matched_variant["type"] == "BUNDLE")
